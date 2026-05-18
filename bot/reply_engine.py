@@ -195,13 +195,11 @@ class ReplyEngine:
 
         # Append final hierarchy reinforcement instruction to make Bot Config the absolute main authority
         system_prompt += (
-            "\n\n=== MAIN BOT CONFIGURATION PRIORITY DIRECTIVE (CRITICAL) ===\n"
-            "1. You represent 'Cleaner in Manchester (0161) Ltd' directly. Sound like a real, professional, family-run business staff member.\n"
-            "2. The main 'PRICING GUIDANCE' flat rates and secure booking fee rules above are your ABSOLUTE, SOLE, AND MAIN AUTHORITIES.\n"
-            "3. Under NO circumstances should you quote hourly rates (e.g. £15/hour is completely wrong and prohibited). Only quote the flat-rate prices defined above.\n"
-            "4. If quoting a Deep Clean or End of Tenancy clean, always mention the £50 secure booking fee (fully deducted from final bills).\n"
-            "5. Never mention booking fees for standard or regular cleans.\n"
-            "6. The 'HISTORICAL CONVERSATION EXAMPLES' provided below are strictly for wording, conversational tone, and context on how to handle requests not explicitly covered in the main rules. Do NOT copy old prices, old booking fees, or old hourly rates from them!\n"
+            "\n\n=== MAIN BOT CONFIGURATION SYSTEM PROMPT DIRECTIVE (SUPREME PRIORITY) ===\n"
+            "1. The configured SYSTEM PROMPT rules and CONTACT DETAILS above are your ABSOLUTE AND SUPREME AUTHORITIES.\n"
+            "2. Do NOT copy, imitate, or rely on any conflicting prices, deposit details, bank accounts, or procedures from any historical examples below. The main rules above MUST override any historical examples.\n"
+            "3. The 'HISTORICAL CONVERSATION EXAMPLES' provided below are ONLY to help you understand general vocabulary, tone of voice, and stylistic preferences. They are pure reference material. The actual rules, bank details, and procedures in the main System Prompt are the absolute truth.\n"
+            "4. Specifically, for booking confirmations: ALWAYS follow the 'BOOKING RULES & CONFIRMATIONS' section in the main system prompt. If they have not provided all 5 details (Name, Address, Date/Time, Clean Type, Price), do NOT confirm the booking! Ask them to confirm the missing details first.\n"
             "============================================================"
         )
 
@@ -209,19 +207,11 @@ class ReplyEngine:
 
         # Add conversation history
         if context:
-            history_text = "\n".join(
-                f"{'You' if m.get('is_from_me') else m.get('sender', 'Customer')}: {m['content']}"
-                for m in context
-            )
-            messages.append({
-                "role": "user",
-                "content": f"Here is the recent conversation history in chat '{chat_name}':\n\n{history_text}\n\nThe latest message from the customer is: \"{new_message}\"\n\nWrite a reply as the business. Keep it concise and natural for WhatsApp."
-            })
+            for m in context:
+                role = "assistant" if m.get("is_from_me") else "user"
+                messages.append({"role": role, "content": m["content"]})
         else:
-            messages.append({
-                "role": "user",
-                "content": f"New message from {sender} in chat '{chat_name}':\n\"{new_message}\"\n\nWrite a reply as the business. Keep it concise and natural for WhatsApp."
-            })
+            messages.append({"role": "user", "content": new_message})
 
         try:
             response = self.llm.chat.completions.create(

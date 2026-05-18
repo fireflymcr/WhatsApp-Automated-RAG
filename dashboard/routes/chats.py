@@ -136,16 +136,16 @@ def _retrieve_rag_context(message_content: str, config: dict) -> str:
         if not top_chunks:
             return ""
             
-        parts = ["=== BUSINESS RESPONSE EXAMPLES & GUIDELINES ==="]
+        parts = ["=== HISTORICAL CONVERSATION EXAMPLES (For Wording, Tone & Context Reference Only) ==="]
         for i, c in enumerate(top_chunks, 1):
             q = c.get("question_text", "").strip()
             a = c.get("answer_text", "").strip()
             if q and a:
-                parts.append(f"Example {i}:\nCustomer query: \"{q}\"\nStandard Response: \"{a}\"")
+                parts.append(f"Historical Example {i}:\nCustomer query: \"{q}\"\nStandard Response: \"{a}\"")
             elif c.get("full_context"):
-                parts.append(f"Context {i}:\n{c['full_context'].strip()}")
-        parts.append("Using the standard responses and context examples above as strict guidelines, write your reply. Maintain the exact pricing model, cancellation rules, tone, and professional style demonstrated above.")
-        parts.append("================================================")
+                parts.append(f"Historical Context {i}:\n{c['full_context'].strip()}")
+        parts.append("IMPORTANT: The historical context examples above are for conversational tone and style reference ONLY. The main System Prompt rules and pricing guidelines have absolute priority.")
+        parts.append("======================================================================================")
         return "\n\n".join(parts)
     except Exception as e:
         logger.error(f"Suggested reply RAG context lookup failed: {e}")
@@ -191,20 +191,21 @@ async def suggest_reply(chat_jid: str):
         if rag_context:
             system_prompt += f"\n\n{rag_context}"
             
+        system_prompt += (
+            "\n\n=== MAIN BOT CONFIGURATION SYSTEM PROMPT DIRECTIVE (SUPREME PRIORITY) ===\n"
+            "1. The configured SYSTEM PROMPT rules and CONTACT DETAILS above are your ABSOLUTE AND SUPREME AUTHORITIES.\n"
+            "2. Do NOT copy, imitate, or rely on any conflicting prices, deposit details, bank accounts, or procedures from any historical examples below. The main rules above MUST override any historical examples.\n"
+            "3. The 'HISTORICAL CONVERSATION EXAMPLES' provided below are ONLY to help you understand general vocabulary, tone of voice, and stylistic preferences. They are pure reference material. The actual rules, bank details, and procedures in the main System Prompt are the absolute truth.\n"
+            "4. Specifically, for booking confirmations: ALWAYS follow the 'BOOKING RULES & CONFIRMATIONS' section in the main system prompt. If they have not provided all 5 details (Name, Address, Date/Time, Clean Type, Price), do NOT confirm the booking! Ask them to confirm the missing details first.\n"
+            "============================================================"
+        )
+            
         openai_client = OpenAI(base_url=base_url, api_key=api_key)
         
-        history_text = "\n".join(
-            f"{'You' if m['is_from_me'] else m.get('sender', 'Customer')}: {m['content']}"
-            for m in history
-        )
-        
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": f"Here is the recent conversation history:\n\n{history_text}\n\nThe latest message from the customer is: \"{latest_cust_msg}\"\n\nWrite a reply as the business. Keep it concise, specific, and natural for WhatsApp. Rely strictly on the pricing rules and business guidelines."
-            }
-        ]
+        messages = [{"role": "system", "content": system_prompt}]
+        for m in history:
+            role = "assistant" if m["is_from_me"] else "user"
+            messages.append({"role": role, "content": m["content"]})
         
         response = openai_client.chat.completions.create(
             model=model,
