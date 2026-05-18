@@ -169,7 +169,7 @@ async def suggest_reply(chat_jid: str):
             SELECT content, is_from_me, sender
             FROM messages
             WHERE chat_jid = ? AND content IS NOT NULL AND content != ''
-            ORDER BY timestamp DESC LIMIT 10
+            ORDER BY timestamp DESC LIMIT 30
         """, (chat_jid,))
         history.reverse()
         

@@ -52,7 +52,7 @@ class BotConfig:
     reply_to_groups: bool = True
 
     # Context
-    context_messages: int = 10
+    context_messages: int = 30
 
     # Sub-configs
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -86,7 +86,7 @@ def load_config(config_path: Optional[str] = None) -> BotConfig:
         cooldown_minutes=raw.get("cooldown_minutes", 10),
         max_replies_per_chat_per_day=raw.get("max_replies_per_chat_per_day", 10),
         reply_to_groups=raw.get("reply_to_groups", True),
-        context_messages=raw.get("context_messages", 10),
+        context_messages=raw.get("context_messages", 30),
     )
 
     # LLM config
