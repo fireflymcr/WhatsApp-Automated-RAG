@@ -224,14 +224,19 @@ async def suggest_reply(chat_jid: str):
             }
         ]
         
+        logger.info(f"Sending prompt to LM Studio ({base_url}, model={model}):")
+        logger.info(f"System Prompt Length: {len(system_prompt)}")
+        logger.info(f"User Message: {messages[1]['content']}")
+        
         response = openai_client.chat.completions.create(
             model=model,
             messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
+            temperature=temperature
         )
         
-        suggestion = response.choices[0].message.content.strip()
+        raw_content = response.choices[0].message.content
+        logger.info(f"Raw LLM Response: '{raw_content}'")
+        suggestion = raw_content.strip()
         return {"success": True, "suggestion": suggestion}
         
     except Exception as e:

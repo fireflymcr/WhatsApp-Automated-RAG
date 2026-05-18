@@ -27,6 +27,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - ./bot:/app
       - ./instances/cleaner/store:/data/bridge-store:ro
       - ./instances/cleaner/context.yaml:/app/context.yaml:ro
     environment:
@@ -49,6 +50,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
+      - ./dashboard:/app
       - ./instances/cleaner/store:/data/bridge-store:ro
       - ./instances/cleaner/context.yaml:/app/context.yaml
     environment:

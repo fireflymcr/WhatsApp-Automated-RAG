@@ -236,7 +236,6 @@ class ReplyEngine:
                 model=self.config.llm.model,
                 messages=messages,
                 temperature=self.config.llm.temperature,
-                max_tokens=self.config.llm.max_tokens,
             )
             reply = response.choices[0].message.content.strip()
             # Safety: don't send empty or obviously broken replies
