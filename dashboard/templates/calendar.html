@@ -1,0 +1,419 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .calendar-container {
+        display: grid;
+        grid-template-columns: 2fr 1fr;
+        gap: 24px;
+        align-items: start;
+    }
+    
+    @media (max-width: 1024px) {
+        .calendar-container {
+            grid-template-columns: 1fr;
+        }
+    }
+    
+    .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .search-box {
+        position: relative;
+        flex: 1;
+        max-width: 400px;
+    }
+    
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 40px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+    
+    .search-box input:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    
+    .search-box .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+    }
+    
+    .action-group {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    
+    .btn-export {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 10px 16px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        transition: all 0.2s;
+        text-decoration: none;
+    }
+    
+    .btn-export:hover {
+        border-color: var(--accent);
+        background: var(--bg-card-hover);
+        transform: translateY(-1px);
+    }
+    
+    .booking-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    
+    .booking-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        position: relative;
+        transition: transform 0.2s, border-color 0.2s;
+    }
+    
+    .booking-card:hover {
+        transform: translateY(-2px);
+        border-color: var(--accent);
+        box-shadow: var(--shadow);
+    }
+    
+    .booking-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 12px;
+        gap: 12px;
+    }
+    
+    .customer-info h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin-bottom: 4px;
+        color: var(--text-primary);
+    }
+    
+    .customer-info .email {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .status-badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-badge.pending {
+        background: rgba(253, 203, 110, 0.15);
+        color: var(--warning);
+        border: 1px solid rgba(253, 203, 110, 0.3);
+    }
+    
+    .status-badge.confirmed {
+        background: rgba(0, 184, 148, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(0, 184, 148, 0.3);
+    }
+    
+    .booking-body {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 16px;
+        padding-top: 12px;
+        border-top: 1px solid var(--border);
+    }
+    
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .detail-item .label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .detail-item .val {
+        font-size: 0.95rem;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    
+    .booking-footer {
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--border);
+    }
+    
+    .btn-action {
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+    }
+    
+    .btn-action.email {
+        background: var(--accent);
+        color: #fff;
+    }
+    
+    .btn-action.email:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+    }
+    
+    .btn-action.delete {
+        background: rgba(231, 76, 60, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(231, 76, 60, 0.2);
+    }
+    
+    .btn-action.delete:hover {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger);
+    }
+    
+    .form-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 24px;
+        position: sticky;
+        top: 32px;
+    }
+    
+    .form-card h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .form-group {
+        margin-bottom: 16px;
+    }
+    
+    .form-group label {
+        display: block;
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+        font-weight: 500;
+    }
+    
+    .form-group input, .form-group select {
+        width: 100%;
+        padding: 10px 12px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: border-color 0.2s;
+    }
+    
+    .form-group input:focus, .form-group select:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 48px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+    }
+    
+    .empty-state .icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+    }
+</style>
+
+<div class="page-header">
+    <h1>📅 Booking Calendar</h1>
+</div>
+
+{% if email_sent %}
+<div class="alert alert-success" style="background: rgba(0, 184, 148, 0.15); color: var(--success); border: 1px solid var(--success); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
+    🎉 Confirmation Email successfully sent to <strong>{{ email_sent }}</strong> via Resend API!
+</div>
+{% endif %}
+
+{% if email_error %}
+<div class="alert alert-danger" style="background: rgba(231, 76, 60, 0.15); color: var(--danger); border: 1px solid var(--danger); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
+    ⚠️ Error sending email: <strong>{{ email_error }}</strong>
+</div>
+{% endif %}
+
+{% if not resend_configured %}
+<div class="alert alert-warning" style="background: rgba(253, 203, 110, 0.15); color: var(--warning); border: 1px solid var(--warning); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500; display: flex; align-items: center; justify-content: space-between;">
+    <span>📧 Resend API Key is not configured! Please configure it in <strong>Configuration</strong> to enable confirmation email triggers.</span>
+    <a href="/bot/config" class="btn-export" style="padding: 6px 12px; font-size: 0.8rem; border-color: var(--warning); color: var(--warning);">Configure Key</a>
+</div>
+{% endif %}
+
+<div class="toolbar">
+    <form method="get" action="/calendar" class="search-box">
+        <span class="search-icon">🔍</span>
+        <input type="text" name="search" value="{{ search }}" placeholder="Search appointments by name, type, postcode...">
+    </form>
+    
+    <div class="action-group">
+        <a href="/api/appointments/export/ics" class="btn-export">
+            <span>📅</span> Export to iCal / Google Calendar
+        </a>
+        <a href="/api/appointments/export/csv" class="btn-export">
+            <span>📊</span> Export to CSV
+        </a>
+    </div>
+</div>
+
+<div class="calendar-container">
+    <div class="booking-grid">
+        {% if appointments %}
+            {% for app in appointments %}
+                <div class="booking-card">
+                    <div class="booking-header">
+                        <div class="customer-info">
+                            <h3>{{ app.customer_name }}</h3>
+                            <div class="email">📧 {{ app.customer_email }}</div>
+                        </div>
+                        <span class="status-badge {{ app.status }}">{{ app.status }}</span>
+                    </div>
+                    
+                    <div class="booking-body">
+                        <div class="detail-item">
+                            <span class="label">🏡 Clean Address</span>
+                            <span class="val">{{ app.address }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">📅 Date & Time</span>
+                            <span class="val">{{ app.clean_date }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">🧹 Clean Type</span>
+                            <span class="val">{{ app.clean_type }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">💰 Agreed Price</span>
+                            <span class="val" style="color: var(--success); font-weight: 700;">{{ app.price }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="booking-footer">
+                        <form method="post" action="/api/appointments/{{ app.id }}/send-email" style="display:inline;">
+                            <button type="submit" class="btn-action email" {% if not resend_configured %}disabled title="Configure Resend API Key to enable"{% endif %}>
+                                ✉️ Send Confirmation Email
+                            </button>
+                        </form>
+                        <form method="post" action="/api/appointments/{{ app.id }}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this booking?');">
+                            <button type="submit" class="btn-action delete">
+                                🗑️ Delete
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="icon">📅</div>
+                <h3>No appointments found</h3>
+                <p>Use the form on the right to manually add a new booking.</p>
+            </div>
+        {% endif %}
+    </div>
+    
+    <div class="form-card">
+        <h3><span>➕</span> Add New Appointment</h3>
+        <form method="post" action="/api/appointments">
+            <div class="form-group">
+                <label>Customer Name</label>
+                <input type="text" name="customer_name" required placeholder="e.g. Nadia">
+            </div>
+            <div class="form-group">
+                <label>Customer Email</label>
+                <input type="email" name="customer_email" required placeholder="e.g. nadia@example.com">
+            </div>
+            <div class="form-group">
+                <label>Clean Address & Postcode</label>
+                <input type="text" name="address" required placeholder="e.g. 114 Kelvin Street, Manchester M11 4ET">
+            </div>
+            <div class="form-group">
+                <label>Clean Date & Time</label>
+                <input type="datetime-local" name="clean_date" required>
+            </div>
+            <div class="form-group">
+                <label>Clean Type</label>
+                <select name="clean_type">
+                    <option value="Standard Clean">Standard Clean</option>
+                    <option value="Deep Clean">Deep Clean</option>
+                    <option value="End of Tenancy Clean">End of Tenancy Clean</option>
+                    <option value="Oven Clean">Oven Clean</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Agreed Price</label>
+                <input type="text" name="price" required placeholder="e.g. £125">
+            </div>
+            <div class="form-group">
+                <label>Status</label>
+                <select name="status">
+                    <option value="pending">Pending Deposit</option>
+                    <option value="confirmed">Confirmed</option>
+                </select>
+            </div>
+            
+            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 10px;">💾 Save Appointment</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

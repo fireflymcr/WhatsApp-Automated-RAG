@@ -19,6 +19,9 @@
             <li><a href="/chats" class="{% if page == 'chats' %}active{% endif %}">
                 <span class="icon">💬</span> Chats
             </a></li>
+            <li><a href="/calendar" class="{% if page == 'calendar' %}active{% endif %}">
+                <span class="icon">📅</span> Calendar
+            </a></li>
             <li><a href="/bot/activity" class="{% if page == 'activity' %}active{% endif %}">
                 <span class="icon">📊</span> Bot Activity
             </a></li>
@@ -43,28 +46,32 @@
     <main class="content">
         {% block content %}
         <div class="dashboard-home">
-            <h1>Dashboard</h1>
-            <p>Select a section from the sidebar to get started.</p>
+            <div class="page-header" style="margin-bottom: 24px;">
+                <h1>🏠 Dashboard Overview</h1>
+                <p style="color: var(--text-secondary); margin-top: 4px;">Welcome back! Here is a live, premium status overview of your WhatsApp Automation Bot.</p>
+            </div>
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-icon">💬</div>
                     <div class="stat-label">Chats</div>
-                    <div class="stat-value">—</div>
+                    <div class="stat-value">{{ chat_count if chat_count is defined else "—" }}</div>
                 </div>
                 <div class="stat-card">
-                    <div class="stat-icon">🤖</div>
-                    <div class="stat-label">Bot Status</div>
-                    <div class="stat-value">Running</div>
+                    <div class="stat-icon">📅</div>
+                    <div class="stat-label">Booked Appointments</div>
+                    <div class="stat-value">{{ app_count if app_count is defined else "—" }}</div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">🧠</div>
-                    <div class="stat-label">LM Studio</div>
-                    <div class="stat-value">—</div>
+                    <div class="stat-label">LM Studio Model</div>
+                    <div class="stat-value" style="font-size: 1rem; font-weight: 600; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;" title="{{ loaded_model if loaded_model is defined else 'local-model' }}">
+                        {{ loaded_model if loaded_model is defined else 'local-model' }}
+                    </div>
                 </div>
                 <div class="stat-card">
                     <div class="stat-icon">🎓</div>
                     <div class="stat-label">Training Chunks</div>
-                    <div class="stat-value">—</div>
+                    <div class="stat-value">{{ chunk_count if chunk_count is defined else "—" }}</div>
                 </div>
             </div>
         </div>

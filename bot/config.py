@@ -58,6 +58,7 @@ class BotConfig:
     llm: LLMConfig = field(default_factory=LLMConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)
     marketing: MarketingConfig = field(default_factory=MarketingConfig)
+    resend: dict = field(default_factory=dict)
 
     # Runtime (set from environment)
     bridge_api_url: str = "http://localhost:8080/api"
@@ -114,6 +115,9 @@ def load_config(config_path: Optional[str] = None) -> BotConfig:
         enabled=mktg_raw.get("enabled", False),
         cron=mktg_raw.get("cron", "0 9 * * 1"),
     )
+
+    # Resend config
+    config.resend = raw.get("resend", {})
 
     # Environment overrides (Docker runtime)
     config.bridge_api_url = os.environ.get(

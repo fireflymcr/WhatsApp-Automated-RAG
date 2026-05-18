@@ -191,15 +191,6 @@ async def suggest_reply(chat_jid: str):
         if rag_context:
             system_prompt += f"\n\n{rag_context}"
             
-        system_prompt += (
-            "\n\n=== MAIN BOT CONFIGURATION SYSTEM PROMPT DIRECTIVE (SUPREME PRIORITY) ===\n"
-            "1. The configured SYSTEM PROMPT rules and CONTACT DETAILS above are your ABSOLUTE AND SUPREME AUTHORITIES.\n"
-            "2. Do NOT copy, imitate, or rely on any conflicting prices, deposit details, bank accounts, or procedures from any historical examples below. The main rules above MUST override any historical examples.\n"
-            "3. The 'HISTORICAL CONVERSATION EXAMPLES' provided below are ONLY to help you understand general vocabulary, tone of voice, and stylistic preferences. They are pure reference material. The actual rules, bank details, and procedures in the main System Prompt are the absolute truth.\n"
-            "4. Specifically, for booking confirmations: ALWAYS follow the 'BOOKING RULES & CONFIRMATIONS' section in the main system prompt. If they have not provided all 5 details (Name, Address, Date/Time, Clean Type, Price), do NOT confirm the booking! Ask them to confirm the missing details first.\n"
-            "============================================================"
-        )
-            
         openai_client = OpenAI(base_url=base_url, api_key=api_key)
         
         history_lines = []

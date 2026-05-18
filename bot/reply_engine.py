@@ -129,6 +129,23 @@ class ReplyEngine:
                 skipped_count += 1
                 continue
 
+            # ── Check if they say they sent a payment ──
+            if self._is_payment_assertion(content):
+                logger.info(f"[{chat_name}] Payment assertion detected! Attempting to auto-confirm booking...")
+                confirmed_ok, pay_reply = self._handle_booking_payment(jid, sender, chat_name, content, context)
+                if confirmed_ok and pay_reply:
+                    send_ok = self._send_message(jid, pay_reply)
+                    if send_ok:
+                        self.tracking_db.record_reply(mid, jid, pay_reply, classification)
+                        self.tracking_db.log_reply(mid, jid, sender, content, classification, pay_reply)
+                        self.tracking_db.update_cooldown(jid)
+                        replied_count += 1
+                        logger.info(f"✓ Payment Replied to {chat_name}: {pay_reply[:80]}...")
+                    else:
+                        self.tracking_db.record_skip(mid, jid, sender, content, classification, "skipped_send_failed")
+                        skipped_count += 1
+                    continue
+
             # ── Generate AI reply ──
             reply_text = self._generate_reply(context, content, chat_name, sender)
             if not reply_text:
@@ -192,17 +209,6 @@ class ReplyEngine:
         if rag_context:
             system_prompt += f"\n\n{rag_context}"
             logger.info("RAG context successfully injected into system prompt")
-
-        # Append final hierarchy reinforcement instruction to make Bot Config the absolute main authority
-        system_prompt += (
-            "\n\n=== MAIN BOT CONFIGURATION SYSTEM PROMPT DIRECTIVE (SUPREME PRIORITY) ===\n"
-            "1. The configured SYSTEM PROMPT rules and CONTACT DETAILS above are your ABSOLUTE AND SUPREME AUTHORITIES.\n"
-            "2. Do NOT copy, imitate, or rely on any conflicting prices, deposit details, bank accounts, or procedures from any historical examples below. The main rules above MUST override any historical examples.\n"
-            "3. The 'HISTORICAL CONVERSATION EXAMPLES' provided below are ONLY to help you understand general vocabulary, tone of voice, and stylistic preferences. They are pure reference material. The actual rules, bank details, and procedures in the main System Prompt are the absolute truth.\n"
-            "4. Specifically, for booking confirmations: ALWAYS follow the 'BOOKING RULES & CONFIRMATIONS' section in the main system prompt. If they have not provided all 5 details (Name, Address, Date/Time, Clean Type, Price), do NOT confirm the booking! Ask them to confirm the missing details first.\n"
-            "============================================================"
-        )
-
         messages = [{"role": "system", "content": system_prompt}]
 
         # Add conversation history
@@ -352,3 +358,258 @@ class ReplyEngine:
         except requests.RequestException as e:
             logger.error(f"Bridge API request error: {e}")
             return False
+
+    def _is_payment_assertion(self, content: str) -> bool:
+        """Analyze content to see if they say they sent a payment/deposit."""
+        # Pre-filter keywords to avoid calling LLM on completely unrelated messages
+        keywords = ["sent", "paid", "payment", "transfer", "deposit", "done", "receipt", "transferred", "money", "fee"]
+        content_lower = content.lower()
+        if not any(k in content_lower for k in keywords):
+            return False
+
+        try:
+            response = self.llm.chat.completions.create(
+                model=self.config.llm.model,
+                messages=[
+                    {"role": "system", "content": "You are a message classifier. Respond with ONLY one word: YES or NO."},
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Analyze this customer message and determine if they are asserting that they have made/sent/transferred/paid a payment or booking deposit.\n"
+                            f"Customer message: \"{content}\"\n"
+                            f"Reply ONLY with 'YES' or 'NO'."
+                        )
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=5,
+            )
+            res = response.choices[0].message.content.strip().upper()
+            return "YES" in res
+        except Exception as e:
+            logger.warning(f"Payment assertion classification failed: {e}")
+            return False
+
+    def _handle_booking_payment(self, jid: str, sender: str, chat_name: str, content: str, context: list):
+        """Auto-extract details, save confirmed booking, send email confirmation and notify admin."""
+        # 1. Build conversation history
+        history_lines = []
+        if context:
+            for m in context:
+                sender_label = "Business (Us)" if m.get("is_from_me") else "Customer"
+                history_lines.append(f"[{sender_label}]: {m['content']}")
+        else:
+            history_lines.append(f"[Customer]: {content}")
+        history_text = "\n".join(history_lines)
+
+        # 2. Ask LLM to extract booking details
+        try:
+            response = self.llm.chat.completions.create(
+                model=self.config.llm.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are a structured data extractor. Extract the cleaning booking details from the conversation history.\n"
+                            "Respond with a valid JSON object only, with no other text, wrapping or markdown blocks. Use double quotes for keys and strings.\n"
+                            "JSON format:\n"
+                            "{\n"
+                            '  "customer_name": "extracted name or null",\n'
+                            '  "customer_email": "extracted email or null",\n'
+                            '  "address": "extracted full address with postcode or null",\n'
+                            '  "clean_date": "extracted clean date and time or null",\n'
+                            '  "clean_type": "extracted clean type (e.g. Deep Clean, Standard Clean) or null",\n'
+                            '  "price": "extracted total price or null"\n'
+                            "}"
+                        )
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Conversation history to extract from:\n{history_text}"
+                    }
+                ],
+                temperature=0.1,
+                max_tokens=500,
+            )
+            raw_json = response.choices[0].message.content.strip()
+            # Clean possible markdown wrapping
+            if raw_json.startswith("```"):
+                lines = raw_json.split("\n")
+                if lines[0].startswith("```json") or lines[0].startswith("```"):
+                    raw_json = "\n".join(lines[1:-1]).strip()
+
+            import json
+            data = json.loads(raw_json)
+
+            customer_name = data.get("customer_name")
+            customer_email = data.get("customer_email")
+            address = data.get("address")
+            clean_date = data.get("clean_date")
+            clean_type = data.get("clean_type")
+            price = data.get("price")
+
+            # Check if we have minimum viable details
+            if not customer_name or not customer_email or not clean_date or not price:
+                logger.warning(f"Failed to auto-confirm booking for {chat_name}: Missing vital details (Name: {customer_name}, Email: {customer_email}, Date: {clean_date}, Price: {price})")
+                return False, None
+
+            # 3. Create or update confirmed appointment in SQL Server
+            app_id = self.tracking_db.create_or_update_appointment(
+                chat_jid=jid,
+                customer_name=customer_name,
+                customer_email=customer_email,
+                address=address or "",
+                clean_date=clean_date,
+                clean_type=clean_type or "Clean",
+                price=price,
+                status="confirmed"
+            )
+
+            if not app_id:
+                logger.error(f"Failed to save confirmed appointment for {chat_name}")
+                return False, None
+
+            logger.info(f"Successfully saved confirmed appointment {app_id} for {customer_name}")
+
+            # 4. Trigger Resend Emails
+            resend_api_key = self.config.resend.get("api_key")
+            resend_from = self.config.resend.get("from_email", "onboarding@resend.dev")
+
+            if resend_api_key:
+                # Build premium HTML email content
+                html_content = f"""
+                <div style="font-family: Arial, sans-serif; color: #2d3436; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #dfe6e9; border-radius: 8px;">
+                    <h2 style="color: #2ecc71; text-align: center; border-bottom: 2px solid #2ecc71; padding-bottom: 10px;">📅 BOOKING CONFIRMED</h2>
+                    <p>Hi <strong>{customer_name}</strong>,</p>
+                    <p>Thank you for choosing <strong>Cleaner in Manchester (0161) Ltd</strong>. We are delighted to confirm that your deposit payment has been received and your booking is fully locked into our calendar! Here are your confirmed details:</p>
+                    
+                    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">👤 Name</th>
+                            <td style="padding: 10px; border: 1px solid #dfe6e9;">{customer_name}</td>
+                        </tr>
+                        <tr>
+                            <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">🏡 Address</th>
+                            <td style="padding: 10px; border: 1px solid #dfe6e9;">{address or 'Not provided'}</td>
+                        </tr>
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">📅 Date & Time</th>
+                            <td style="padding: 10px; border: 1px solid #dfe6e9;">{clean_date}</td>
+                        </tr>
+                        <tr>
+                            <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">🧹 Type of Clean</th>
+                            <td style="padding: 10px; border: 1px solid #dfe6e9;">{clean_type or 'Clean'}</td>
+                        </tr>
+                        <tr style="background-color: #f8f9fa;">
+                            <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">💰 Total Price</th>
+                            <td style="padding: 10px; border: 1px solid #dfe6e9;">{price}</td>
+                        </tr>
+                    </table>
+                    
+                    <div style="background-color: #d4edda; color: #155724; padding: 15px; border-radius: 6px; margin: 20px 0; border: 1px solid #c3e6cb;">
+                        <h4 style="margin-top: 0; color: #155724;">🔒 Deposit Received Successfully!</h4>
+                        <p style="margin-bottom: 5px;">We have received your <strong>£50 secure booking fee</strong>. This has been fully deducted from your price. The remaining balance is payable on completion.</p>
+                        <p style="font-size: 13px; color: #155724; margin-bottom: 0;">⚠️ <em>Cancellation Policy: Non-refundable if cancelled within 24 hours of your clean.</em></p>
+                    </div>
+                    
+                    <p style="text-align: center; margin-top: 30px; font-size: 12px; color: #b2bec3;">
+                        Cleaner in Manchester (0161) Ltd | Phone: 0161 710 4789 | Website: https://0161cleanerinmanchester.co.uk/
+                    </p>
+                </div>
+                """
+
+                # Send email to Customer
+                try:
+                    logger.info(f"Sending confirmation email to customer: {customer_email}")
+                    requests.post(
+                        "https://api.resend.com/emails",
+                        headers={
+                            "Authorization": f"Bearer {resend_api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "from": resend_from,
+                            "to": [customer_email],
+                            "subject": f"Booking Confirmed! - {clean_type or 'Clean'} on {clean_date}",
+                            "html": html_content
+                        },
+                        timeout=10
+                    )
+                except Exception as ex:
+                    logger.error(f"Failed to email customer: {ex}")
+
+                # Sleep 30 seconds to avoid Resend API rate limits as requested
+                logger.info("Sleeping 30 seconds to avoid Resend API rate limits...")
+                import time
+                time.sleep(30)
+
+                # Send email to Admin (info@0161cleanerinmanchester.co.uk)
+                try:
+                    logger.info("Sending confirmation email copy to admin...")
+                    admin_html = f"""
+                    <div style="font-family: Arial, sans-serif; color: #2d3436; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #dfe6e9; border-radius: 8px;">
+                        <h2 style="color: #e67e22; text-align: center; border-bottom: 2px solid #e67e22; padding-bottom: 10px;">🔔 NEW BOOKING PAID & CONFIRMED</h2>
+                        <p>A new WhatsApp booking has been confirmed via deposit payment receipt detection!</p>
+                        
+                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+                            <tr style="background-color: #f8f9fa;">
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">👤 Name</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{customer_name}</td>
+                            </tr>
+                            <tr>
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">📧 Email</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{customer_email}</td>
+                            </tr>
+                            <tr style="background-color: #f8f9fa;">
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">🏡 Address</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{address or 'Not provided'}</td>
+                            </tr>
+                            <tr>
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">📅 Date & Time</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{clean_date}</td>
+                            </tr>
+                            <tr style="background-color: #f8f9fa;">
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">🧹 Type of Clean</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{clean_type or 'Clean'}</td>
+                            </tr>
+                            <tr>
+                                <th style="text-align: left; padding: 10px; border: 1px solid #dfe6e9;">💰 Total Price</th>
+                                <td style="padding: 10px; border: 1px solid #dfe6e9;">{price}</td>
+                            </tr>
+                        </table>
+                    </div>
+                    """
+                    requests.post(
+                        "https://api.resend.com/emails",
+                        headers={
+                            "Authorization": f"Bearer {resend_api_key}",
+                            "Content-Type": "application/json"
+                        },
+                        json={
+                            "from": resend_from,
+                            "to": ["info@0161cleanerinmanchester.co.uk"],
+                            "subject": f"🔔 Booking Paid! - {customer_name} ({clean_date})",
+                            "html": admin_html
+                        },
+                        timeout=10
+                    )
+                except Exception as ex:
+                    logger.error(f"Failed to email admin: {ex}")
+            else:
+                logger.warning("Resend API not configured. Skipping confirmation emails.")
+
+            whatsapp_reply = (
+                f"Thank you, {customer_name}! 😊 I have successfully verified your deposit payment. 💰\n\n"
+                f"Your booking is now **fully locked in and confirmed** in our calendar! 📅\n\n"
+                f"🏡 **Address**: {address}\n"
+                f"📅 **Date & Time**: {clean_date}\n"
+                f"🧹 **Clean Type**: {clean_type}\n"
+                f"💰 **Total Price**: {price}\n\n"
+                f"A detailed confirmation email has been sent to **{customer_email}**. 📧 We look forward to seeing you then!\n\n"
+                f"If you need anything else, feel free to ask! 🧹"
+            )
+            return True, whatsapp_reply
+
+        except Exception as e:
+            logger.error(f"Error handling booking payment confirmation: {e}", exc_info=True)
+            return False, None

@@ -31,11 +31,76 @@
         <button id="suggestBtn" class="btn btn-secondary" onclick="generateAISuggestion()" style="padding: 10px 18px;">
             <span>✨</span> Suggest AI Reply
         </button>
+        <button type="button" class="btn btn-secondary" onclick="toggleQuickBook()" style="padding: 10px 18px; border-color: var(--success); color: var(--success);">
+            <span>📅</span> Quick Book
+        </button>
         <button id="sendBtn" class="btn btn-primary" onclick="sendReply()" style="padding: 10px 20px; margin-left: auto;">
             <span>🚀</span> Send to Customer
         </button>
     </div>
     <div id="statusAlert" style="margin-top: 12px; font-size: 0.85rem; display: none; padding: 10px; border-radius: var(--radius-sm);"></div>
+</div>
+
+<!-- Quick Book Appointment Form (Collapsible) -->
+<div id="quickBookPanel" style="margin-top: 16px; max-width: 700px; background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; display: none;">
+    <h3 style="font-size: 0.9rem; color: var(--success); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+        <span>📅</span> Quick Book Appointment for {{ chat_name }}
+    </h3>
+    <form method="post" action="/api/appointments" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <input type="hidden" name="chat_jid" value="{{ chat_jid }}">
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Customer Name</label>
+            <input type="text" name="customer_name" value="{{ chat_name }}" required style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+        </div>
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Customer Email</label>
+            <input type="email" name="customer_email" required placeholder="e.g. customer@example.com" style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+        </div>
+        
+        <div class="form-group" style="grid-column: span 2;">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Clean Address & Postcode</label>
+            <input type="text" name="address" required placeholder="e.g. 123 Main St, Manchester M1 1AA" style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+        </div>
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Clean Date & Time</label>
+            <input type="datetime-local" name="clean_date" required style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+        </div>
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Clean Type</label>
+            <select name="clean_type" style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+                <option value="Standard Clean">Standard Clean</option>
+                <option value="Deep Clean">Deep Clean</option>
+                <option value="End of Tenancy Clean">End of Tenancy Clean</option>
+                <option value="Oven Clean">Oven Clean</option>
+            </select>
+        </div>
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Agreed Price</label>
+            <input type="text" name="price" placeholder="e.g. £125" required style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+        </div>
+        
+        <div class="form-group">
+            <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 4px;">Status</label>
+            <select name="status" style="width: 100%; padding: 8px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.9rem; outline: none;">
+                <option value="pending">Pending Deposit</option>
+                <option value="confirmed">Confirmed</option>
+            </select>
+        </div>
+        
+        <div style="grid-column: span 2; display: flex; gap: 10px; margin-top: 8px;">
+            <button type="submit" class="btn btn-primary" style="padding: 10px 18px; display: flex; align-items: center; gap: 6px;">
+                <span>💾</span> Confirm & Save Booking
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="toggleQuickBook()" style="padding: 10px 18px;">
+                Cancel
+            </button>
+        </div>
+    </form>
 </div>
 
 <div style="margin-top: 20px; display: flex; gap: 10px;">
@@ -46,6 +111,15 @@
 </div>
 
 <script>
+function toggleQuickBook() {
+    const panel = document.getElementById("quickBookPanel");
+    if (panel.style.display === "none") {
+        panel.style.display = "block";
+        panel.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        panel.style.display = "none";
+    }
+}
 // Auto scroll message thread to bottom on load
 const thread = document.getElementById("messageThread");
 if (thread) {

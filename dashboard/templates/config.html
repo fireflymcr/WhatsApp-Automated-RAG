@@ -3,6 +3,13 @@
 <div class="page-header">
     <h1>⚙️ Bot Configuration</h1>
 </div>
+
+{% if updated %}
+<div class="alert alert-success" style="background: rgba(0, 184, 148, 0.15); color: var(--success); border: 1px solid var(--success); padding: 15px; border-radius: 8px; margin-bottom: 20px; font-weight: 500;">
+    ✨ Bot Configuration updated successfully! The background bot and dashboard have hot-reloaded the new settings.
+</div>
+{% endif %}
+
 <form method="post" action="/bot/config" class="config-form">
     <div class="config-grid">
         <div class="config-card">
@@ -52,7 +59,19 @@
                     <input type="number" name="llm_temperature" value="{{ config.get('llm', {}).get('temperature', 0.7) }}" step="0.1" min="0.0" max="1.5">
                 </label>
                 <label>Max Output Tokens
-                    <input type="number" name="llm_max_tokens" value="{{ config.get('llm', {}).get('max_tokens', 300) }}" min="50" max="2000">
+                    <input type="number" name="llm_max_tokens" value="{{ config.get('llm', {}).get('max_tokens', 300) }}" min="50" max="200000">
+                </label>
+            </div>
+        </div>
+        
+        <div class="config-card full-width">
+            <h3>📧 Resend API Email Settings</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
+                <label>Resend API Key
+                    <input type="password" name="resend_api_key" value="{{ config.get('resend', {}).get('api_key', '') }}" placeholder="re_...">
+                </label>
+                <label>From Email Address (Must be verified in Resend)
+                    <input type="text" name="resend_from_email" value="{{ config.get('resend', {}).get('from_email', 'onboarding@resend.dev') }}" placeholder="bookings@0161cleanerinmanchester.co.uk">
                 </label>
             </div>
         </div>
@@ -62,6 +81,6 @@
         <textarea name="system_prompt" rows="15" class="prompt-editor">{{ config.get('system_prompt', '') }}</textarea>
     </div>
     <button type="submit" class="btn btn-primary btn-lg">💾 Save Configuration</button>
-    <p class="help-text" style="margin-top: 10px;">Note: The bot container will pick up changes on its next check cycle (every 3 min).</p>
+    <p class="help-text" style="margin-top: 10px;">Note: The bot container and dashboard will pick up changes and hot-reload instantly.</p>
 </form>
 {% endblock %}

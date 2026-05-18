@@ -156,17 +156,26 @@ Without this setup, you'll likely run into errors like:
 
 ## Architecture Overview
 
-This application consists of two main components:
+This application consists of four core components:
 
-1. **Go WhatsApp Bridge** (`whatsapp-bridge/`): A Go application that connects to WhatsApp's web API, handles authentication via QR code, and stores message history in SQLite. It serves as the bridge between WhatsApp and the MCP server.
+1. **Go WhatsApp Bridge** (`whatsapp-bridge/`): A Go application that connects to WhatsApp's web API, handles authentication via QR code, and stores message history in SQLite. It serves as the bridge between WhatsApp and the MCP/AI systems.
 
-2. **Python MCP Server** (`whatsapp-mcp-server/`): A Python server implementing the Model Context Protocol (MCP), which provides standardized tools for Claude to interact with WhatsApp data and send/receive messages.
+2. **Python MCP Server** (`whatsapp-mcp-server/`): A Python server implementing the Model Context Protocol (MCP), providing standardized tools for Claude and other LLM clients to securely interact with WhatsApp.
 
-### Data Storage
+3. **Python AI Bot Auto-Reply Engine** (`bot/`): A background service using APScheduler that polls for unprocessed incoming messages, classifies queries (e.g. SPAM, SALES, INQUIRY), runs vector/RAG lookups against a SQL Server knowledge base, and auto-generates context-aware customer replies using advanced local reasoning models (Qwen 3.6/3.5).
+   - **💰 Auto-Payment Interception & Confirmation:** Automatically intercepts deposit/payment receipt claims, extracts customer details via structured JSON extraction, writes/updates confirmed schedules to the database, and schedules premium HTML customer & admin confirmations via the **Resend API** (with 30-second rate-limiting protection).
+   - **📢 Broadcast Marketing Engine:** Triggers and schedules custom bulk marketing campaigns using scheduled cron jobs with automatic daily cap protection.
 
-- All message history is stored in a SQLite database within the `whatsapp-bridge/store/` directory
-- The database maintains tables for chats and messages
-- Messages are indexed for efficient searching and retrieval
+4. **Premium Web Dashboard** (`dashboard/`): A gorgeous custom web UI for business owners to manage operations, featuring:
+   - **💬 Dual-Column WhatsApp Chat logs:** Real-time synchronized chat views with clean green (sent) and gray (received) bubble styling.
+   - **🤖 Interactive AI Reply Assistant:** Click to generate a context-aware draft via local RAG/LLM, edit the response, and send it instantly.
+   - **📅 Schedule Calendar Dashboard:** Dynamic iCal-compliant calendar showing all bookings, color-coded by status (pending, confirmed).
+   - **⚙️ Bot Configuration Panel:** Live hot-reloading configurations for system prompts, Lookback settings, RAG embeddings, and Resend API integrations.
+
+### Data Storage & Databases
+
+- **SQLite Database** (`/data/bridge-store/messages.db`): Lightweight database maintaining local message history logs for the whatsmeow bridge.
+- **Microsoft SQL Server Database**: Enterprise-grade database for permanent audit trails, RAG search chunk embeddings, broadcast marketing rules, and `{prefix}_appointments` calendar schedules.
 
 ## Usage
 
