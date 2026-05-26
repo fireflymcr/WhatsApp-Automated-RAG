@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math"
 	"math/rand"
 	"net/http"
@@ -729,11 +730,50 @@ func startRESTServer(client *whatsmeow.Client, messageStore *MessageStore, port 
 			return
 		}
 
-		// Parse the request body
 		var req SendMessageRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request format", http.StatusBadRequest)
-			return
+		
+		contentType := r.Header.Get("Content-Type")
+		if strings.HasPrefix(contentType, "multipart/form-data") {
+			// Parse multipart form
+			err := r.ParseMultipartForm(10 << 20) // 10 MB limit
+			if err != nil {
+				http.Error(w, "Error parsing multipart form", http.StatusBadRequest)
+				return
+			}
+			
+			req.Recipient = r.FormValue("recipient")
+			req.Message = r.FormValue("message")
+			
+			// Handle file if present
+			file, handler, err := r.FormFile("file")
+			if err == nil {
+				defer file.Close()
+				
+				// Ensure temp directory exists
+				os.MkdirAll("store/temp", 0755)
+				
+				// Create temporary file
+				tempFilePath := filepath.Join("store/temp", handler.Filename)
+				tempFile, err := os.Create(tempFilePath)
+				if err != nil {
+					http.Error(w, "Error creating temporary file", http.StatusInternalServerError)
+					return
+				}
+				defer tempFile.Close()
+				
+				// Copy uploaded file to temp file
+				if _, err := io.Copy(tempFile, file); err != nil {
+					http.Error(w, "Error saving uploaded file", http.StatusInternalServerError)
+					return
+				}
+				
+				req.MediaPath = tempFilePath
+			}
+		} else {
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "Invalid request format", http.StatusBadRequest)
+				return
+			}
 		}
 
 		// Validate request

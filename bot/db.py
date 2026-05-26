@@ -7,7 +7,7 @@ Database helpers for the WhatsApp Bot.
 import sqlite3
 import logging
 from datetime import datetime, date
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 import pymssql
 
@@ -46,16 +46,39 @@ class BridgeDB:
         finally:
             conn.close()
 
-    def get_conversation_context(self, chat_jid: str, limit: int = 10) -> List[Dict]:
+    def get_contact_name(self, chat_jid: str) -> Optional[str]:
         conn = self._connect()
         try:
             cur = conn.cursor()
-            cur.execute("""
-                SELECT m.sender, m.content, m.timestamp, m.is_from_me, c.name AS chat_name
-                FROM messages m JOIN chats c ON m.chat_jid = c.jid
-                WHERE m.chat_jid = ? AND m.content IS NOT NULL AND m.content != ''
-                ORDER BY m.timestamp DESC LIMIT ?
-            """, (chat_jid, limit))
+            cur.execute("SELECT name FROM chats WHERE jid = ?", (chat_jid,))
+            row = cur.fetchone()
+            if row and row["name"]:
+                return row["name"].strip()
+            return None
+        except sqlite3.Error as e:
+            logger.error(f"Bridge DB get_contact_name error: {e}")
+            return None
+        finally:
+            conn.close()
+
+    def get_conversation_context(self, chat_jid: str, limit: Optional[int] = None) -> List[Dict]:
+        conn = self._connect()
+        try:
+            cur = conn.cursor()
+            if limit is not None:
+                cur.execute("""
+                    SELECT m.sender, m.content, m.timestamp, m.is_from_me, m.media_type, m.filename, c.name AS chat_name
+                    FROM messages m JOIN chats c ON m.chat_jid = c.jid
+                    WHERE m.chat_jid = ? AND ((m.content IS NOT NULL AND m.content != '') OR (m.media_type IS NOT NULL AND m.media_type != ''))
+                    ORDER BY m.timestamp DESC LIMIT ?
+                """, (chat_jid, limit))
+            else:
+                cur.execute("""
+                    SELECT m.sender, m.content, m.timestamp, m.is_from_me, m.media_type, m.filename, c.name AS chat_name
+                    FROM messages m JOIN chats c ON m.chat_jid = c.jid
+                    WHERE m.chat_jid = ? AND ((m.content IS NOT NULL AND m.content != '') OR (m.media_type IS NOT NULL AND m.media_type != ''))
+                    ORDER BY m.timestamp DESC
+                """, (chat_jid,))
             rows = [dict(r) for r in cur.fetchall()]
             rows.reverse()
             return rows
@@ -153,6 +176,18 @@ class TrackingDB:
                     price NVARCHAR(50),
                     status NVARCHAR(50) DEFAULT 'pending',
                     created_at DATETIME2 DEFAULT GETDATE())
+            """)
+            cur.execute(f"""
+                IF NOT EXISTS (SELECT * FROM sysobjects WHERE name='{p}_email_log' AND xtype='U')
+                CREATE TABLE {p}_email_log (
+                    id INT IDENTITY(1,1) PRIMARY KEY,
+                    recipient NVARCHAR(255) NOT NULL,
+                    cc NVARCHAR(MAX),
+                    subject NVARCHAR(500),
+                    body NVARCHAR(MAX),
+                    status NVARCHAR(50) DEFAULT 'success',
+                    error_message NVARCHAR(MAX),
+                    sent_at DATETIME2 DEFAULT GETDATE())
             """)
             conn.commit()
             logger.info(f"Migrations complete for '{p}'")
@@ -308,16 +343,19 @@ class TrackingDB:
         conn = self._connect()
         try:
             cur = conn.cursor()
-            # Check for existing pending appointment for this chat_jid to avoid duplicate slots
-            cur.execute(f"SELECT id FROM {self.prefix}_appointments WHERE chat_jid=%s AND status != 'confirmed'", (chat_jid,))
+            # Check for existing appointment for this chat_jid (prefer pending first, then confirmed)
+            cur.execute(f"SELECT id, status FROM {self.prefix}_appointments WHERE chat_jid=%s ORDER BY CASE WHEN status = 'pending' THEN 0 ELSE 1 END, created_at DESC", (chat_jid,))
             row = cur.fetchone()
             if row:
                 app_id = row['id']
+                existing_status = row.get('status', 'pending')
+                # Preserve confirmed status if it was already confirmed
+                final_status = 'confirmed' if existing_status == 'confirmed' else status
                 cur.execute(f"""
                     UPDATE {self.prefix}_appointments
                     SET customer_name=%s, customer_email=%s, address=%s, clean_date=%s, clean_type=%s, price=%s, status=%s
                     WHERE id=%s
-                """, (customer_name, customer_email, address, clean_date, clean_type, price, status, app_id))
+                """, (customer_name, customer_email, address, clean_date, clean_type, price, final_status, app_id))
                 conn.commit()
                 return app_id
             else:
@@ -330,10 +368,41 @@ class TrackingDB:
                 conn.commit()
                 return row['id'] if row else 0
         except Exception as e:
-            logger = pymssql.logging.getLogger("whatsapp-bot.db") if hasattr(pymssql, "logging") else None
-            if logger:
-                logger.error(f"Failed to create/update appointment: {e}")
+            # use class logger
+            logger.error(f"Failed to create/update appointment: {e}")
             return 0
+        finally:
+            conn.close()
+
+    def get_appointments_by_jid(self, chat_jid: str) -> List[Dict]:
+        conn = self._connect()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT id, customer_name, customer_email, address, clean_date, clean_type, price, status, clean_status, notes 
+                FROM {self.prefix}_appointments 
+                WHERE chat_jid=%s
+            """, (chat_jid,))
+            return [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Failed to fetch appointments by JID: {e}")
+            return []
+        finally:
+            conn.close()
+
+    def log_email(self, recipient: str, cc: str, subject: str, body: str, status: str, error_message: str = None) -> bool:
+        conn = self._connect()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"""
+                INSERT INTO {self.prefix}_email_log (recipient, cc, subject, body, status, error_message)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (recipient, cc, subject, body, status, error_message))
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"Failed to log email to database: {e}")
+            return False
         finally:
             conn.close()
 

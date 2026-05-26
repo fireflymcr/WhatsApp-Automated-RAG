@@ -1,8 +1,17 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page-header">
-    <a href="/chats" class="back-btn">← Back</a>
-    <h1>{{ chat_name }}</h1>
+<div class="page-header" style="position: relative;">
+    <a href="/chats" class="back-btn" style="display: inline-block; margin-bottom: 8px;">← Back</a>
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 4px;">
+        <h1 id="chatNameTitle" style="margin: 0; font-size: 1.8rem; font-weight: 700; color: var(--text-primary);">{{ chat_name }}</h1>
+        <button id="editNameBtn" class="action-btn" onclick="showRenameForm()" title="Edit Name" style="font-size: 1.1rem; padding: 4px; opacity: 0.6; cursor: pointer; transition: opacity 0.2s;">✏️</button>
+        
+        <form id="renameForm" style="display: none; align-items: center; gap: 8px;" onsubmit="saveCustomName(event)">
+            <input type="text" id="customNameInput" value="{{ chat_name }}" required style="padding: 6px 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 1.5rem; font-weight: 700; outline: none; border-color: var(--accent);">
+            <button type="submit" class="action-btn" style="color: var(--success); font-size: 1.2rem; padding: 4px; cursor: pointer;">✓</button>
+            <button type="button" class="action-btn" onclick="hideRenameForm()" style="color: var(--danger); font-size: 1.2rem; padding: 4px; cursor: pointer;">✗</button>
+        </form>
+    </div>
     <span class="jid-label">{{ chat_jid }}</span>
 </div>
 
@@ -13,7 +22,26 @@
             {% if not msg.is_from_me and msg.sender %}
             <div class="message-sender">{{ msg.sender }}</div>
             {% endif %}
+            
+            {% if msg.media_type %}
+            <div class="message-media" style="margin-bottom: 8px;">
+                {% if msg.is_image %}
+                    <img src="/media-file/{{ msg.chat_jid }}/{{ msg.id }}/{{ msg.filename }}" alt="Image" style="max-width: 100%; max-height: 300px; border-radius: 8px; cursor: pointer; display: block; margin-bottom: 6px;" onclick="window.open(this.src)">
+                {% elif msg.is_video %}
+                    <video src="/media-file/{{ msg.chat_jid }}/{{ msg.id }}/{{ msg.filename }}" controls style="max-width: 100%; max-height: 300px; border-radius: 8px; display: block; margin-bottom: 6px;"></video>
+                {% elif msg.is_audio %}
+                    <audio src="/media-file/{{ msg.chat_jid }}/{{ msg.id }}/{{ msg.filename }}" controls style="max-width: 100%; display: block; margin-bottom: 6px;"></audio>
+                {% else %}
+                    <a href="/media-file/{{ msg.chat_jid }}/{{ msg.id }}/{{ msg.filename }}" target="_blank" style="color: var(--info); text-decoration: underline; display: inline-flex; align-items: center; gap: 6px; margin-bottom: 6px;">
+                        <span>📄</span> Download {{ msg.filename or 'Document' }}
+                    </a>
+                {% endif %}
+            </div>
+            {% endif %}
+            
+            {% if msg.content %}
             <div class="message-text" style="white-space: pre-wrap;">{{ msg.content }}</div>
+            {% endif %}
             <div class="message-time">{{ msg.timestamp }}</div>
         </div>
     </div>
@@ -33,6 +61,10 @@
         </button>
         <button type="button" class="btn btn-secondary" onclick="toggleQuickBook()" style="padding: 10px 18px; border-color: var(--success); color: var(--success);">
             <span>📅</span> Quick Book
+        </button>
+        <input type="file" id="attachmentFile" style="display: none;" onchange="updateAttachmentName()" />
+        <button type="button" id="attachBtn" class="btn btn-secondary" onclick="document.getElementById('attachmentFile').click()" style="padding: 10px 18px; border-color: var(--info); color: var(--info);">
+            <span>📎</span> <span id="attachName">Attach File</span>
         </button>
         <button id="sendBtn" class="btn btn-primary" onclick="sendReply()" style="padding: 10px 20px; margin-left: auto;">
             <span>🚀</span> Send to Customer
@@ -126,7 +158,65 @@ if (thread) {
     thread.scrollTop = thread.scrollHeight;
 }
 
+function updateAttachmentName() {
+    const fileInput = document.getElementById("attachmentFile");
+    const attachName = document.getElementById("attachName");
+    if (fileInput.files.length > 0) {
+        attachName.innerText = fileInput.files[0].name;
+    } else {
+        attachName.innerText = "Attach File";
+    }
+}
+
 const chatJid = "{{ chat_jid }}";
+
+function showRenameForm() {
+    document.getElementById("chatNameTitle").style.display = "none";
+    document.getElementById("editNameBtn").style.display = "none";
+    document.getElementById("renameForm").style.display = "flex";
+    document.getElementById("customNameInput").focus();
+}
+
+function hideRenameForm() {
+    document.getElementById("chatNameTitle").style.display = "block";
+    document.getElementById("editNameBtn").style.display = "block";
+    document.getElementById("renameForm").style.display = "none";
+}
+
+async function saveCustomName(event) {
+    event.preventDefault();
+    const newName = document.getElementById("customNameInput").value.trim();
+    if (!newName) return;
+    
+    try {
+        const response = await fetch(`/api/chats/${encodeURIComponent(chatJid)}/rename`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ name: newName })
+        });
+        const result = await response.json();
+        if (result.success) {
+            document.getElementById("chatNameTitle").innerText = newName;
+            document.getElementById("customNameInput").value = newName;
+            hideRenameForm();
+            // Trigger chat list refresh if open in split views or sidebar
+            if (window.parent && window.parent.document) {
+                const chatList = window.parent.document.querySelector('.chat-list');
+                if (chatList) {
+                    chatList.dispatchEvent(new Event('chatListChanged'));
+                }
+            }
+            // Trigger local body custom event in case it's in a single frame
+            document.body.dispatchEvent(new Event('chatListChanged'));
+        } else {
+            alert("Failed to save custom name: " + (result.error || "unknown error"));
+        }
+    } catch (err) {
+        alert("Error saving custom name: " + err.message);
+    }
+}
 
 async function generateAISuggestion() {
     const suggestBtn = document.getElementById("suggestBtn");
@@ -170,13 +260,14 @@ async function sendReply() {
     const sendBtn = document.getElementById("sendBtn");
     const replyTextarea = document.getElementById("replyTextarea");
     const statusAlert = document.getElementById("statusAlert");
+    const fileInput = document.getElementById("attachmentFile");
     const message = replyTextarea.value.trim();
     
-    if (!message) {
+    if (!message && fileInput.files.length === 0) {
         statusAlert.style.display = "block";
         statusAlert.style.background = "rgba(253, 203, 110, 0.15)";
         statusAlert.style.color = "var(--warning)";
-        statusAlert.innerText = "Please write or generate a message before sending.";
+        statusAlert.innerText = "Please write a message or attach a file before sending.";
         return;
     }
     
@@ -190,6 +281,9 @@ async function sendReply() {
     try {
         const formData = new FormData();
         formData.append("message", message);
+        if (fileInput.files.length > 0) {
+            formData.append("file", fileInput.files[0]);
+        }
         
         const response = await fetch(`/api/chats/${encodeURIComponent(chatJid)}/send`, {
             method: "POST",

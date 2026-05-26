@@ -124,24 +124,49 @@
     
     .status-badge {
         display: inline-block;
-        padding: 4px 12px;
+        padding: 6px 14px;
         border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
+        font-size: 0.72rem;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
+        cursor: pointer;
+        transition: all 0.2s;
+        outline: none;
+    }
+    
+    .status-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        filter: brightness(1.1);
+    }
+    
+    .status-badge:active {
+        transform: translateY(0);
     }
     
     .status-badge.pending {
         background: rgba(253, 203, 110, 0.15);
         color: var(--warning);
-        border: 1px solid rgba(253, 203, 110, 0.3);
+        border: 1px solid rgba(253, 203, 110, 0.4);
     }
     
     .status-badge.confirmed {
         background: rgba(0, 184, 148, 0.15);
         color: var(--success);
-        border: 1px solid rgba(0, 184, 148, 0.3);
+        border: 1px solid rgba(0, 184, 148, 0.4);
+    }
+
+    .status-badge.clean-pending {
+        background: rgba(116, 185, 255, 0.15);
+        color: var(--info);
+        border: 1px solid rgba(116, 185, 255, 0.4);
+    }
+
+    .status-badge.clean-completed {
+        background: rgba(0, 184, 148, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(0, 184, 148, 0.4);
     }
     
     .booking-body {
@@ -203,6 +228,32 @@
         background: var(--accent-hover);
         transform: translateY(-1px);
     }
+
+    .btn-action.invoice {
+        background: #0984e3;
+        color: #fff;
+    }
+
+    .btn-action.invoice:hover {
+        background: #0771c2;
+        transform: translateY(-1px);
+    }
+
+    .btn-action.review {
+        background: #d35400;
+        color: #fff;
+    }
+
+    .btn-action.review:hover {
+        background: #e67e22;
+        transform: translateY(-1px);
+    }
+
+    .btn-action:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+        transform: none !important;
+    }
     
     .btn-action.delete {
         background: rgba(231, 76, 60, 0.1);
@@ -214,6 +265,18 @@
         background: var(--danger);
         color: #fff;
         border-color: var(--danger);
+    }
+
+    .btn-action.edit-btn, .btn-action.notes-btn {
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+    }
+
+    .btn-action.edit-btn:hover, .btn-action.notes-btn:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--accent);
+        transform: translateY(-1px);
     }
     
     .form-card {
@@ -324,10 +387,34 @@
                 <div class="booking-card">
                     <div class="booking-header">
                         <div class="customer-info">
-                            <h3>{{ app.customer_name }}</h3>
+                            {% if app.chat_jid %}
+                                <h3><a href="/chats/{{ app.chat_jid }}" style="color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="View WhatsApp Chat History">{{ app.display_name or app.customer_name }} <span style="font-size: 0.85rem; opacity: 0.7;">💬</span></a></h3>
+                            {% else %}
+                                <h3>{{ app.display_name or app.customer_name }}</h3>
+                            {% endif %}
                             <div class="email">📧 {{ app.customer_email }}</div>
                         </div>
-                        <span class="status-badge {{ app.status }}">{{ app.status }}</span>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                            <form method="post" action="/api/appointments/{{ app.id }}/toggle-status" style="display:inline; margin: 0;">
+                                <button type="submit" class="status-badge {{ app.status }}" title="Click to toggle payment status">
+                                    {% if app.status == 'confirmed' %}
+                                        🟢 Deposit Paid
+                                    {% else %}
+                                        🔴 Deposit Unpaid
+                                    {% endif %}
+                                </button>
+                            </form>
+                            
+                            <form method="post" action="/api/appointments/{{ app.id }}/toggle-clean-status" style="display:inline; margin: 0;">
+                                <button type="submit" class="status-badge clean-{{ app.clean_status or 'pending' }}" title="Click to toggle job completion status">
+                                    {% if app.clean_status == 'completed' %}
+                                        ✨ Clean Completed
+                                    {% else %}
+                                        ⏳ Clean Pending
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </div>
                     </div>
                     
                     <div class="booking-body">
@@ -347,6 +434,22 @@
                             <span class="label">💰 Agreed Price</span>
                             <span class="val" style="color: var(--success); font-weight: 700;">{{ app.price }}</span>
                         </div>
+                        {% if app.notes %}
+                            <div class="detail-item" style="grid-column: span 2; margin-top: 10px; background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--warning);">
+                                <span class="label" style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">📝 Notes</span>
+                                <span class="val" id="notes-display-{{ app.id }}" style="font-size: 0.9rem; color: var(--text-secondary); white-space: pre-wrap; font-weight: normal; line-height: 1.4;">{{ app.notes }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Inline Notes Panel -->
+                    <div id="notes-section-{{ app.id }}" class="notes-section" style="display: none; padding: 15px; background: rgba(0,0,0,0.15); border-radius: var(--radius-sm); margin: 12px 0; border: 1px solid var(--border);">
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">📝 JOB NOTES</label>
+                        <textarea id="notes-input-{{ app.id }}" rows="3" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 10px; font-size: 0.9rem; resize: vertical; line-height: 1.4;" placeholder="Type any important notes about this clean here...">{{ app.notes or '' }}</textarea>
+                        <div style="display: flex; justify-content: flex-end; margin-top: 10px; gap: 8px;">
+                            <button type="button" class="btn-action" style="background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick="toggleNotes('{{ app.id }}')">Cancel</button>
+                            <button type="button" class="btn-action" style="background: var(--success); color: white; border: none;" onclick="saveNotes('{{ app.id }}')">💾 Save Notes</button>
+                        </div>
                     </div>
                     
                     <div class="booking-footer">
@@ -355,6 +458,38 @@
                                 ✉️ Send Confirmation Email
                             </button>
                         </form>
+                        <button type="button" class="btn-action invoice" {% if not resend_configured %}disabled title="Configure Resend API Key to enable"{% endif %}
+                                data-id="{{ app.id }}"
+                                data-name="{{ app.customer_name }}"
+                                data-email="{{ app.customer_email }}"
+                                data-address="{{ app.address }}"
+                                data-date="{{ app.clean_date }}"
+                                data-type="{{ app.clean_type }}"
+                                data-price="{{ app.price }}"
+                                onclick="openInvoiceModal(this)">
+                            🧾 Send Invoice
+                        </button>
+                        <form method="post" action="/api/appointments/{{ app.id }}/send-review-email" style="display:inline;">
+                            <button type="submit" class="btn-action review" {% if not resend_configured %}disabled title="Configure Resend API Key to enable"{% endif %}>
+                                ⭐ Send Review Request
+                            </button>
+                        </form>
+                        
+                        <button type="button" class="btn-action edit-btn" 
+                                data-id="{{ app.id }}"
+                                data-name="{{ app.customer_name }}"
+                                data-email="{{ app.customer_email }}"
+                                data-address="{{ app.address }}"
+                                data-date="{{ app.clean_date }}"
+                                data-type="{{ app.clean_type }}"
+                                data-price="{{ app.price }}"
+                                onclick="openEditModal(this)">
+                            ✏️ Edit Details
+                        </button>
+                        <button type="button" class="btn-action notes-btn" onclick="toggleNotes('{{ app.id }}')">
+                            📝 Notes
+                        </button>
+                        
                         <form method="post" action="/api/appointments/{{ app.id }}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this booking?');">
                             <button type="submit" class="btn-action delete">
                                 🗑️ Delete
@@ -411,9 +546,185 @@
                     <option value="confirmed">Confirmed</option>
                 </select>
             </div>
+            <div class="form-group">
+                <label>Job Notes</label>
+                <textarea name="notes" placeholder="Type any initial notes here..." rows="3" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem; resize: vertical; line-height: 1.4;"></textarea>
+            </div>
             
             <button type="submit" class="btn btn-primary" style="width: 100%; padding: 12px; margin-top: 10px;">💾 Save Appointment</button>
         </form>
     </div>
 </div>
+
+<!-- Edit Appointment Modal -->
+<div id="editModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+    <div class="modal-content" style="background: var(--bg-card); margin: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); width: 90%; max-width: 500px; box-shadow: var(--shadow);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">✏️ Edit Appointment</h3>
+            <span class="close-btn" style="color: var(--text-secondary); float: right; font-size: 28px; font-weight: bold; cursor: pointer;" onclick="closeEditModal()">&times;</span>
+        </div>
+        <form id="editForm" method="post" action="">
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Customer Name</label>
+                <input type="text" id="edit-name" name="customer_name" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Customer Email</label>
+                <input type="email" id="edit-email" name="customer_email" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Clean Address</label>
+                <textarea id="edit-address" name="address" required rows="3" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem; resize: vertical;"></textarea>
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Date & Time</label>
+                <input type="text" id="edit-date" name="clean_date" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Clean Type</label>
+                <input type="text" id="edit-type" name="clean_type" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Agreed Price</label>
+                <input type="text" id="edit-price" name="price" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+            </div>
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn-action" style="background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick="closeEditModal()">Cancel</button>
+                <button type="submit" class="btn-action" style="background: var(--accent); color: white; border: none;">💾 Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Send Invoice Modal -->
+<div id="invoiceModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.75); backdrop-filter: blur(4px); align-items: center; justify-content: center;">
+    <div class="modal-content" style="background: var(--bg-card); margin: auto; padding: 24px; border: 1px solid var(--border); border-radius: var(--radius); width: 90%; max-width: 500px; box-shadow: var(--shadow);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <h3 style="margin: 0; font-size: 1.3rem; display: flex; align-items: center; gap: 8px; color: var(--text-primary);">🧾 Send Invoice</h3>
+            <span class="close-btn" style="color: var(--text-secondary); float: right; font-size: 28px; font-weight: bold; cursor: pointer;" onclick="closeInvoiceModal()">&times;</span>
+        </div>
+        <form id="invoiceForm" method="post" action="">
+            <div style="background: rgba(255,255,255,0.02); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 20px; border-left: 3px solid var(--accent); text-align: left;">
+                <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 6px;">Customer: <strong id="invoice-customer-name" style="color: var(--text-primary);"></strong></div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 6px;">Address: <span id="invoice-clean-address" style="color: var(--text-primary); font-weight: 500;"></span></div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 6px;">Clean Date & Time: <span id="invoice-clean-date" style="color: var(--text-primary); font-weight: 500;"></span></div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 6px;">Clean Type: <span id="invoice-clean-type" style="color: var(--text-primary); font-weight: 500;"></span></div>
+                <div style="font-size: 0.9rem; color: var(--text-secondary);">Agreed Price: <strong id="invoice-agreed-price" style="color: var(--success);"></strong></div>
+            </div>
+            
+            <div class="form-group" style="margin-bottom: 20px; text-align: left;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Invoice Amount (£)</label>
+                <input type="number" step="0.01" id="invoice-amount" name="amount" required style="width: 100%; padding: 12px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 1.1rem; font-weight: bold;">
+                <small style="color: var(--text-muted); margin-top: 4px; display: block;">Enter the amount the customer needs to pay (e.g. Agreed Price minus Deposit).</small>
+            </div>
+            
+            <div style="display: flex; justify-content: flex-end; gap: 12px;">
+                <button type="button" class="btn-action" style="background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick="closeInvoiceModal()">Cancel</button>
+                <button type="submit" class="btn-action invoice" style="background: #0984e3; color: white; border: none;">🚀 Send Invoice</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function openEditModal(button) {
+    const id = button.getAttribute('data-id');
+    const name = button.getAttribute('data-name');
+    const email = button.getAttribute('data-email');
+    const address = button.getAttribute('data-address');
+    const date = button.getAttribute('data-date');
+    const type = button.getAttribute('data-type');
+    const price = button.getAttribute('data-price');
+
+    document.getElementById('editForm').action = '/api/appointments/' + id + '/update';
+    document.getElementById('edit-name').value = name;
+    document.getElementById('edit-email').value = email;
+    document.getElementById('edit-address').value = address;
+    document.getElementById('edit-date').value = date;
+    document.getElementById('edit-type').value = type;
+    document.getElementById('edit-price').value = price;
+    
+    document.getElementById('editModal').style.display = 'flex';
+}
+
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+function openInvoiceModal(button) {
+    const id = button.getAttribute('data-id');
+    const name = button.getAttribute('data-name');
+    const address = button.getAttribute('data-address');
+    const date = button.getAttribute('data-date');
+    const type = button.getAttribute('data-type');
+    const price = button.getAttribute('data-price');
+
+    // Clean price string to extract numbers for default invoice amount
+    // e.g. "£170" or "170"
+    let cleanPrice = price.replace(/[^0-9.]/g, '');
+    let defaultAmount = cleanPrice ? parseFloat(cleanPrice) : 0.00;
+
+    document.getElementById('invoiceForm').action = '/api/appointments/' + id + '/send-invoice';
+    document.getElementById('invoice-customer-name').innerText = name;
+    document.getElementById('invoice-clean-address').innerText = address;
+    document.getElementById('invoice-clean-date').innerText = date;
+    document.getElementById('invoice-clean-type').innerText = type;
+    document.getElementById('invoice-agreed-price').innerText = price;
+    document.getElementById('invoice-amount').value = defaultAmount.toFixed(2);
+    
+    document.getElementById('invoiceModal').style.display = 'flex';
+}
+
+function closeInvoiceModal() {
+    document.getElementById('invoiceModal').style.display = 'none';
+}
+
+// Close modal if clicked outside
+window.onclick = function(event) {
+    const editModal = document.getElementById('editModal');
+    const invoiceModal = document.getElementById('invoiceModal');
+    if (event.target == editModal) {
+        editModal.style.display = 'none';
+    }
+    if (event.target == invoiceModal) {
+        invoiceModal.style.display = 'none';
+    }
+}
+
+function toggleNotes(appId) {
+    const notesSection = document.getElementById('notes-section-' + appId);
+    if (notesSection.style.display === 'none') {
+        notesSection.style.display = 'block';
+        document.getElementById('notes-input-' + appId).focus();
+    } else {
+        notesSection.style.display = 'none';
+    }
+}
+
+async function saveNotes(appId) {
+    const notesInput = document.getElementById('notes-input-' + appId);
+    const notes = notesInput.value;
+    
+    try {
+        const response = await fetch('/api/appointments/' + appId + '/update-notes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes: notes })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            // Reload page to display new notes snippet
+            window.location.reload();
+        } else {
+            alert('Error saving notes: ' + (data.message || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Failed to save notes.');
+    }
+}
+</script>
 {% endblock %}

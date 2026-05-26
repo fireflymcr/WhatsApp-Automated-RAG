@@ -163,13 +163,16 @@ This application consists of four core components:
 2. **Python MCP Server** (`whatsapp-mcp-server/`): A Python server implementing the Model Context Protocol (MCP), providing standardized tools for Claude and other LLM clients to securely interact with WhatsApp.
 
 3. **Python AI Bot Auto-Reply Engine** (`bot/`): A background service using APScheduler that polls for unprocessed incoming messages, classifies queries (e.g. SPAM, SALES, INQUIRY), runs vector/RAG lookups against a SQL Server knowledge base, and auto-generates context-aware customer replies using advanced local reasoning models (Qwen 3.6/3.5).
-   - **💰 Auto-Payment Interception & Confirmation:** Automatically intercepts deposit/payment receipt claims, extracts customer details via structured JSON extraction, writes/updates confirmed schedules to the database, and schedules premium HTML customer & admin confirmations via the **Resend API** (with 30-second rate-limiting protection).
+   - **🛡️ Booking Awareness & DPA Compliance Verification:** Automatically queries saved calendar appointments. Prior to discussing or revealing any details of an existing booking, the bot enforces a strict Data Protection Act (DPA) check in the chat history, verifying the first line of the clean address, customer email, and date/time.
+   - **📝 Provisional Booking Auto-Save (Handoffs):** Automatically detects when a booking is confirmed or when a provisional handoff/lead is gathered. It extracts booking details via structured JSON extraction, writes/updates them as pending bookings in the database, and alerts the admin via email.
+   - **💰 Auto-Payment Interception & Confirmation:** Automatically intercepts deposit/payment receipt claims, extracts customer details, updates database status to confirmed, and schedules premium HTML customer & admin confirmations via the **Resend API** (with 30-second rate-limiting protection).
    - **📢 Broadcast Marketing Engine:** Triggers and schedules custom bulk marketing campaigns using scheduled cron jobs with automatic daily cap protection.
 
 4. **Premium Web Dashboard** (`dashboard/`): A gorgeous custom web UI for business owners to manage operations, featuring:
-   - **💬 Dual-Column WhatsApp Chat logs:** Real-time synchronized chat views with clean green (sent) and gray (received) bubble styling.
-   - **🤖 Interactive AI Reply Assistant:** Click to generate a context-aware draft via local RAG/LLM, edit the response, and send it instantly.
-   - **📅 Schedule Calendar Dashboard:** Dynamic iCal-compliant calendar showing all bookings, color-coded by status (pending, confirmed).
+   - **💬 Dual-Column WhatsApp Chat logs:** Real-time synchronized chat views with clean green (sent) and gray (received) bubble styling, including friendly name resolution.
+   - **🤖 Interactive AI Reply Assistant:** Click to generate a context-aware draft via local RAG/LLM, edit the response, and send it instantly (with integrated DPA verification warnings).
+   - **📅 Schedule Calendar Dashboard:** Dynamic iCal-compliant calendar showing all bookings, color-coded by status (pending, confirmed), with real-time friendly name lookups.
+   - **🧾 Custom Invoice Dispatch System:** Send custom invoices directly from the UI calendar cards. Supports opening a modal to set a custom amount, dispatching premium HTML invoices via Resend (with CC to admin), and sending structured WhatsApp bridge confirmations (noting that a PDF invoice has been sent to their email).
    - **⚙️ Bot Configuration Panel:** Live hot-reloading configurations for system prompts, Lookback settings, RAG embeddings, and Resend API integrations.
 
 ### Data Storage & Databases

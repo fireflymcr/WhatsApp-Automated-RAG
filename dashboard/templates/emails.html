@@ -1,0 +1,439 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .emails-container {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+    
+    .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+    }
+    
+    .filter-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    
+    .search-box {
+        position: relative;
+        flex: 1;
+        min-width: 250px;
+        max-width: 400px;
+    }
+    
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 40px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+    
+    .search-box input:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    
+    .search-box .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+    }
+    
+    .status-select {
+        padding: 12px 16px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        cursor: pointer;
+        min-width: 150px;
+    }
+    
+    .status-select:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    
+    .btn-filter {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: var(--radius-sm);
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+    
+    .btn-filter:hover {
+        background: var(--accent-hover);
+    }
+
+    .btn-reset {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 12px 20px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        transition: all 0.2s;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-reset:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--accent);
+    }
+    
+    .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+    
+    .badge.success {
+        background: rgba(0, 184, 148, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(0, 184, 148, 0.3);
+    }
+    
+    .badge.failed {
+        background: rgba(231, 76, 60, 0.15);
+        color: var(--danger);
+        border: 1px solid rgba(231, 76, 60, 0.3);
+    }
+    
+    .btn-view {
+        background: transparent;
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 6px 12px;
+        border-radius: var(--radius-sm);
+        cursor: pointer;
+        font-size: 0.8rem;
+        transition: all 0.2s;
+    }
+    
+    .btn-view:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: rgba(108, 92, 231, 0.1);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 48px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+    }
+    
+    .empty-state .icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+    }
+
+    /* Modal Styling */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(4px);
+    }
+    
+    .modal-content {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        width: 90%;
+        max-width: 800px;
+        height: 80%;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        animation: modalFadeIn 0.3s ease;
+    }
+    
+    @keyframes modalFadeIn {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .modal-header {
+        padding: 20px;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        background: var(--bg-secondary);
+    }
+    
+    .modal-header h3 {
+        margin: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+    }
+
+    .modal-header .meta-info {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-top: 4px;
+    }
+    
+    .modal-close {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 1.5rem;
+        cursor: pointer;
+        transition: color 0.2s;
+        padding: 0 4px;
+        line-height: 1;
+    }
+    
+    .modal-close:hover {
+        color: var(--text-primary);
+    }
+    
+    .modal-body {
+        flex: 1;
+        padding: 20px;
+        background: #ffffff; /* Show white background for true email preview */
+        overflow: hidden;
+        position: relative;
+    }
+
+    .modal-body iframe {
+        width: 100%;
+        height: 100%;
+        border: none;
+    }
+    
+    .error-alert {
+        background: rgba(231, 76, 60, 0.1);
+        border: 1px solid var(--danger);
+        color: var(--danger);
+        padding: 12px 16px;
+        border-radius: var(--radius-sm);
+        margin-bottom: 20px;
+        font-size: 0.9rem;
+    }
+</style>
+
+<div class="emails-container">
+    <div class="page-header">
+        <h1>✉️ Email Logs</h1>
+        <p style="color: var(--text-secondary); margin-top: 4px;">Track and view status of all automated and manual booking confirmations sent via Resend.</p>
+    </div>
+
+    <!-- Filters & Search -->
+    <form method="GET" action="/emails" class="toolbar">
+        <div class="filter-group">
+            <div class="search-box">
+                <span class="search-icon">🔍</span>
+                <input type="text" name="q" placeholder="Search recipient, subject, body..." value="{{ search or '' }}">
+            </div>
+            
+            <select name="status" class="status-select">
+                <option value="">All Statuses</option>
+                <option value="success" {% if status_filter == 'success' %}selected{% endif %}>Success</option>
+                <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+            </select>
+            
+            <button type="submit" class="btn-filter">Filter</button>
+            {% if search or status_filter %}
+                <a href="/emails" class="btn-reset">Clear Filters</a>
+            {% endif %}
+        </div>
+    </form>
+
+    <!-- Table -->
+    {% if emails %}
+        <div style="overflow-x: auto; width: 100%;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Recipient</th>
+                        <th>CC</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Sent At</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for email in emails %}
+                        <tr>
+                            <td>
+                                <strong style="color: var(--text-primary);">{{ email.recipient }}</strong>
+                            </td>
+                            <td>
+                                <span style="color: var(--text-secondary); font-size: 0.8rem;">{{ email.cc or '—' }}</span>
+                            </td>
+                            <td>
+                                <div class="msg-col" title="{{ email.subject }}" style="max-width: 300px;">
+                                    {{ email.subject }}
+                                </div>
+                            </td>
+                            <td>
+                                {% if email.status == 'success' %}
+                                    <span class="badge success">Success</span>
+                                {% else %}
+                                    <span class="badge failed" title="{{ email.error_message or 'Unknown error' }}">Failed</span>
+                                {% endif %}
+                            </td>
+                            <td class="time-col">
+                                {{ email.sent_at }}
+                            </td>
+                            <td>
+                                <button type="button" class="btn-view" 
+                                        data-id="{{ email.id }}"
+                                        data-recipient="{{ email.recipient | escape }}"
+                                        data-subject="{{ email.subject | escape }}"
+                                        data-sent-at="{{ email.sent_at }}"
+                                        data-is-failed="{% if email.status == 'failed' %}true{% else %}false{% endif %}"
+                                        onclick="previewEmail(this)">
+                                    View Body
+                                </button>
+                                <!-- Store body content in a hidden script tag to load dynamically into the iframe safely -->
+                                <script id="email-body-{{ email.id }}" type="text/html">
+                                    {{ email.body | safe }}
+                                </script>
+                                {% if email.status == 'failed' %}
+                                    <script id="email-error-{{ email.id }}" type="text/html">
+                                        {{ email.error_message | escape }}
+                                    </script>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <div class="icon">✉️</div>
+            <h3>No emails sent yet</h3>
+            <p style="margin-top: 8px;">Sent confirmation emails will appear here once booking triggers are fired.</p>
+        </div>
+    {% endif %}
+</div>
+
+<!-- Preview Modal -->
+<div id="emailModal" class="modal" onclick="closeEmailModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div class="modal-header">
+            <div>
+                <h3 id="modalSubject">Email Preview</h3>
+                <div class="meta-info">
+                    <span id="modalMeta">To: </span>
+                </div>
+            </div>
+            <button class="modal-close" onclick="closeModalDirect()">&times;</button>
+        </div>
+        <div style="padding: 20px 20px 0 20px; display: none;" id="errorContainer">
+            <div class="error-alert">
+                <strong>Error Details:</strong> <span id="errorText"></span>
+            </div>
+        </div>
+        <div class="modal-body">
+            <iframe id="emailFrame" sandbox="allow-same-origin"></iframe>
+        </div>
+    </div>
+</div>
+
+<script>
+    function previewEmail(button) {
+        const id = button.getAttribute('data-id');
+        const recipient = button.getAttribute('data-recipient');
+        const subject = button.getAttribute('data-subject');
+        const sentAt = button.getAttribute('data-sent-at');
+        const isFailed = button.getAttribute('data-is-failed') === 'true';
+
+        document.getElementById('modalSubject').textContent = subject;
+        document.getElementById('modalMeta').textContent = 'To: ' + recipient + ' | Sent at: ' + sentAt;
+        
+        // Handle error details if failed
+        const errorContainer = document.getElementById('errorContainer');
+        if (isFailed) {
+            const errorElement = document.getElementById('email-error-' + id);
+            if (errorElement) {
+                document.getElementById('errorText').textContent = errorElement.textContent;
+                errorContainer.style.display = 'block';
+            } else {
+                errorContainer.style.display = 'none';
+            }
+        } else {
+            errorContainer.style.display = 'none';
+        }
+        
+        const bodyContent = document.getElementById('email-body-' + id).innerHTML;
+        const iframe = document.getElementById('emailFrame');
+        
+        // Write body content to iframe document to keep formatting isolated
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write(bodyContent);
+        doc.close();
+        
+        document.getElementById('emailModal').style.display = 'flex';
+    }
+    
+    function closeEmailModal(event) {
+        if (event.target.id === 'emailModal') {
+            closeModalDirect();
+        }
+    }
+    
+    function closeModalDirect() {
+        document.getElementById('emailModal').style.display = 'none';
+        // Clear iframe to free up memory
+        const iframe = document.getElementById('emailFrame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write('');
+        doc.close();
+    }
+    
+    // Close modal on Escape key
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeModalDirect();
+        }
+    });
+</script>
+{% endblock %}

@@ -66,13 +66,51 @@
         
         <div class="config-card full-width">
             <h3>📧 Resend API Email Settings</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin-bottom: 20px;">
                 <label>Resend API Key
                     <input type="password" name="resend_api_key" value="{{ config.get('resend', {}).get('api_key', '') }}" placeholder="re_...">
                 </label>
                 <label>From Email Address (Must be verified in Resend)
                     <input type="text" name="resend_from_email" value="{{ config.get('resend', {}).get('from_email', 'onboarding@resend.dev') }}" placeholder="bookings@0161cleanerinmanchester.co.uk">
                 </label>
+            </div>
+            
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email Confirmation Subject Line
+                    <input type="text" name="resend_email_subject" value="{{ config.get('resend', {}).get('email_subject', '') }}" placeholder="Booking Confirmation - {clean_type} for {customer_name}" style="width: 100%; margin-top: 5px;">
+                </label>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                    Available variables: <code>{customer_name}</code>, <code>{address}</code>, <code>{clean_date}</code>, <code>{clean_type}</code>, <code>{price}</code>, <code>{postcode}</code>.
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Email Confirmation Body (HTML allowed)
+                    <textarea name="resend_email_body_html" rows="12" style="width: 100%; margin-top: 5px; font-family: monospace; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 12px; font-size: 0.9rem; resize: vertical;">{{ config.get('resend', {}).get('email_body_html', '') }}</textarea>
+                </label>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                    Supports rich HTML. Make sure to keep formatting compatible with email clients. Available variables: <code>{customer_name}</code>, <code>{address}</code>, <code>{clean_date}</code>, <code>{clean_type}</code>, <code>{price}</code>, <code>{postcode}</code>.
+                </div>
+            </div>
+
+            <hr style="border: 0; border-top: 1px solid var(--border); margin: 24px 0;">
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Review Request Subject Line
+                    <input type="text" name="resend_review_email_subject" value="{{ config.get('resend', {}).get('review_email_subject', '') }}" placeholder="How did we do? Please leave a review! ⭐" style="width: 100%; margin-top: 5px;">
+                </label>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                    Available variables: <code>{customer_name}</code>, <code>{address}</code>, <code>{clean_date}</code>, <code>{clean_type}</code>, <code>{price}</code>, <code>{postcode}</code>.
+                </div>
+            </div>
+
+            <div>
+                <label style="display: block; margin-bottom: 8px; font-weight: 500;">Review Request Body (HTML allowed)
+                    <textarea name="resend_review_email_body_html" rows="12" style="width: 100%; margin-top: 5px; font-family: monospace; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 12px; font-size: 0.9rem; resize: vertical;">{{ config.get('resend', {}).get('review_email_body_html', '') }}</textarea>
+                </label>
+                <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">
+                    Supports rich HTML. Make sure to keep formatting compatible with email clients. Available variables: <code>{customer_name}</code>, <code>{address}</code>, <code>{clean_date}</code>, <code>{clean_type}</code>, <code>{price}</code>, <code>{postcode}</code>.
+                </div>
             </div>
         </div>
     </div>
@@ -83,4 +121,32 @@
     <button type="submit" class="btn btn-primary btn-lg">💾 Save Configuration</button>
     <p class="help-text" style="margin-top: 10px;">Note: The bot container and dashboard will pick up changes and hot-reload instantly.</p>
 </form>
+
+<script src="https://cdn.jsdelivr.net/npm/tinymce@6.8.2/tinymce.min.js" referrerpolicy="origin"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        tinymce.init({
+            selector: 'textarea[name="resend_email_body_html"], textarea[name="resend_review_email_body_html"]',
+            base_url: 'https://cdn.jsdelivr.net/npm/tinymce@6.8.2',
+            plugins: 'anchor autolink charmap codesample emoticons image link lists media searchreplace table visualblocks wordcount',
+            toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | forecolor backcolor | link image table | align lineheight | numlist bullist indent outdent | emoticons charmap | removeformat',
+            height: 550,
+            menubar: true,
+            branding: false,
+            promotion: false,
+            elementpath: false,
+            skin: 'oxide-dark',
+            content_css: 'dark',
+            setup: function (editor) {
+                // Ensure data is synced to original textarea before form submission
+                editor.on('change', function () {
+                    editor.save();
+                });
+                editor.on('keyup', function () {
+                    editor.save();
+                });
+            }
+        });
+    });
+</script>
 {% endblock %}

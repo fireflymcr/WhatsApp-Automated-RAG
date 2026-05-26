@@ -7,19 +7,41 @@
         <button type="submit" class="btn btn-primary">Search</button>
     </form>
 </div>
-<div class="chat-list" hx-ext="sse" sse-connect="/api/sse/chats">
+<div class="chat-list" hx-ext="sse" sse-connect="/api/sse/chats" hx-get="/chats" hx-select=".chat-list" hx-target="this" hx-swap="outerHTML" hx-trigger="chatListChanged from:body">
     {% for chat in chats %}
-    <a href="/chats/{{ chat.jid }}" class="chat-item">
-        <div class="chat-avatar">{{ chat.name[0] if chat.name else '?' }}</div>
-        <div class="chat-info">
-            <div class="chat-name">{{ chat.name or chat.jid }}</div>
-            <div class="chat-preview">{{ (chat.last_msg or '')[:80] }}</div>
+    <div class="chat-item {% if chat.is_pinned %}pinned{% endif %}">
+        <a href="/chats/{{ chat.jid }}" class="chat-link">
+            <div class="chat-avatar">{{ chat.name[0] if chat.name else '?' }}</div>
+            <div class="chat-info">
+                <div class="chat-name">
+                    {% if chat.is_pinned %}
+                    <span class="pin-indicator" title="Pinned chat">📌</span>
+                    {% endif %}
+                    {{ chat.name or chat.jid }}
+                </div>
+                <div class="chat-preview">{{ (chat.last_msg or '')[:80] }}</div>
+            </div>
+        </a>
+        <div class="chat-actions">
+            <button class="action-btn pin-btn {% if chat.is_pinned %}active{% endif %}"
+                    hx-post="/api/chats/{{ chat.jid }}/toggle-pin"
+                    hx-swap="none"
+                    title="{% if chat.is_pinned %}Unpin Chat{% else %}Pin Chat{% endif %}">
+                {% if chat.is_pinned %}📍{% else %}📌{% endif %}
+            </button>
+            <button class="action-btn delete-btn"
+                    hx-post="/api/chats/{{ chat.jid }}/delete"
+                    hx-confirm="Are you sure you want to delete/hide this chat?"
+                    hx-swap="none"
+                    title="Delete Chat">
+                🗑️
+            </button>
         </div>
         <div class="chat-meta">
             <div class="chat-time">{{ chat.last_message_time or '' }}</div>
             {% if chat.msg_count %}<span class="badge">{{ chat.msg_count }}</span>{% endif %}
         </div>
-    </a>
+    </div>
     {% else %}
     <div class="empty-state">No chats found.</div>
     {% endfor %}

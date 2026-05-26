@@ -21,6 +21,7 @@ app = FastAPI(title="WhatsApp Bot Dashboard")
 
 # Static files + templates
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/media", StaticFiles(directory="/data/bridge-store"), name="media")
 templates = Jinja2Templates(directory="templates")
 
 # Include route modules
