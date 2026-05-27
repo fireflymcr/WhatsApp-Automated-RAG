@@ -392,6 +392,7 @@ async def add_appointment(
     chat_jid: str = Form(""),
     notes: str = Form(None),
     phone: str = Form(""),
+    clean_status: str = Form("pending"),
 ):
     try:
         # Ensure columns exist
@@ -418,8 +419,8 @@ async def add_appointment(
             pass
         sql_execute(f"""
             INSERT INTO {INSTANCE}_appointments (chat_jid, customer_name, customer_email, address, clean_date, clean_type, price, status, clean_status, notes, phone)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s, %s)
-        """, (chat_jid, customer_name, customer_email, address, clean_date, clean_type, price, status, notes, phone))
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (chat_jid, customer_name, customer_email, address, clean_date, clean_type, price, status, clean_status, notes, phone))
     except Exception as e:
         logger.error(f"Failed to add appointment: {e}")
     return RedirectResponse("/calendar", status_code=303)
@@ -464,7 +465,12 @@ async def toggle_appointment_clean_status(app_id: int):
         rows = sql_query(f"SELECT clean_status FROM {INSTANCE}_appointments WHERE id = %s", (app_id,))
         if rows:
             current_status = rows[0].get("clean_status") or "pending"
-            new_status = "completed" if current_status == "pending" else "pending"
+            if current_status == "need_to_quote":
+                new_status = "pending"
+            elif current_status == "pending":
+                new_status = "completed"
+            else:
+                new_status = "need_to_quote"
             sql_execute(f"UPDATE {INSTANCE}_appointments SET clean_status = %s WHERE id = %s", (new_status, app_id))
             logger.info(f"Toggled appointment {app_id} clean_status from {current_status} to {new_status}")
     except Exception as e:
@@ -829,13 +835,14 @@ async def update_appointment(
     clean_type: str = Form(...),
     price: str = Form(...),
     phone: str = Form(""),
+    clean_status: str = Form("pending"),
 ):
     try:
         sql_execute(f"""
             UPDATE {INSTANCE}_appointments
-            SET customer_name = %s, customer_email = %s, address = %s, clean_date = %s, clean_type = %s, price = %s, phone = %s
+            SET customer_name = %s, customer_email = %s, address = %s, clean_date = %s, clean_type = %s, price = %s, phone = %s, clean_status = %s
             WHERE id = %s
-        """, (customer_name, customer_email, address, clean_date, clean_type, price, phone, app_id))
+        """, (customer_name, customer_email, address, clean_date, clean_type, price, phone, clean_status, app_id))
         logger.info(f"Updated appointment {app_id}")
     except Exception as e:
         logger.error(f"Failed to update appointment {app_id}: {e}")
@@ -941,17 +948,30 @@ async def export_csv():
     except Exception:
         appointments = []
         
-    csv_lines = ["ID,Customer Name,Customer Email,Address,Clean Date,Clean Type,Price,Status,Created At"]
+    csv_lines = ["ID,Customer Name,Customer Email,Customer Phone,Address,Clean Date,Clean Type,Price,Deposit Status,Job Status,Created At"]
     for app in appointments:
+        clean_status_raw = app.get("clean_status") or "pending"
+        if clean_status_raw == "need_to_quote":
+            clean_status_friendly = "Need to Quote"
+        elif clean_status_raw == "completed":
+            clean_status_friendly = "Clean Completed"
+        else:
+            clean_status_friendly = "Clean Pending"
+            
+        deposit_status_raw = app.get("status") or "pending"
+        deposit_status_friendly = "Deposit Paid" if deposit_status_raw == "confirmed" else "Deposit Unpaid"
+        
         row = [
             str(app["id"]),
             f'"{app["customer_name"]}"',
             f'"{app["customer_email"]}"',
+            f'"{app.get("phone") or ""}"',
             f'"{app["address"].replace(chr(34), chr(39))}"',
             f'"{app["clean_date"]}"',
             f'"{app["clean_type"]}"',
             f'"{app["price"]}"',
-            f'"{app["status"]}"',
+            f'"{deposit_status_friendly}"',
+            f'"{clean_status_friendly}"',
             str(app["created_at"])
         ]
         csv_lines.append(",".join(row))

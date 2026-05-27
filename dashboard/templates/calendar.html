@@ -168,6 +168,12 @@
         color: var(--success);
         border: 1px solid rgba(0, 184, 148, 0.4);
     }
+
+    .status-badge.clean-need_to_quote {
+        background: rgba(230, 126, 34, 0.15);
+        color: #e67e22;
+        border: 1px solid rgba(230, 126, 34, 0.4);
+    }
     
     .booking-body {
         display: grid;
@@ -409,9 +415,11 @@
                             </form>
                             
                             <form method="post" action="/api/appointments/{{ app.id }}/toggle-clean-status" style="display:inline; margin: 0;">
-                                <button type="submit" class="status-badge clean-{{ app.clean_status or 'pending' }}" title="Click to toggle job completion status">
+                                <button type="submit" class="status-badge clean-{{ app.clean_status or 'pending' }}" title="Click to toggle job status">
                                     {% if app.clean_status == 'completed' %}
                                         ✨ Clean Completed
+                                    {% elif app.clean_status == 'need_to_quote' %}
+                                        🔍 Need to Quote
                                     {% else %}
                                         ⏳ Clean Pending
                                     {% endif %}
@@ -483,6 +491,7 @@
                                 data-name="{{ app.customer_name }}"
                                 data-email="{{ app.customer_email }}"
                                 data-phone="{{ app.phone or '' }}"
+                                data-clean-status="{{ app.clean_status or 'pending' }}"
                                 data-address="{{ app.address }}"
                                 data-date="{{ app.clean_date }}"
                                 data-type="{{ app.clean_type }}"
@@ -555,6 +564,14 @@
                 </select>
             </div>
             <div class="form-group">
+                <label>Job Status</label>
+                <select name="clean_status">
+                    <option value="pending">Clean Pending</option>
+                    <option value="need_to_quote">Need to Quote</option>
+                    <option value="completed">Clean Completed</option>
+                </select>
+            </div>
+            <div class="form-group">
                 <label>Job Notes</label>
                 <textarea name="notes" placeholder="Type any initial notes here..." rows="3" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem; resize: vertical; line-height: 1.4;"></textarea>
             </div>
@@ -600,6 +617,14 @@
                 <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Agreed Price</label>
                 <input type="text" id="edit-price" name="price" required style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
             </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 6px; font-size: 0.85rem; color: var(--text-secondary); font-weight: 500;">Job Status</label>
+                <select id="edit-clean-status" name="clean_status" style="width: 100%; padding: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); font-size: 0.95rem;">
+                    <option value="pending">Clean Pending</option>
+                    <option value="need_to_quote">Need to Quote</option>
+                    <option value="completed">Clean Completed</option>
+                </select>
+            </div>
             <div style="display: flex; justify-content: flex-end; gap: 12px;">
                 <button type="button" class="btn-action" style="background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick="closeEditModal()">Cancel</button>
                 <button type="submit" class="btn-action" style="background: var(--accent); color: white; border: none;">💾 Save Changes</button>
@@ -644,6 +669,7 @@ function openEditModal(button) {
     const name = button.getAttribute('data-name');
     const email = button.getAttribute('data-email');
     const phone = button.getAttribute('data-phone');
+    const cleanStatus = button.getAttribute('data-clean-status');
     const address = button.getAttribute('data-address');
     const date = button.getAttribute('data-date');
     const type = button.getAttribute('data-type');
@@ -653,6 +679,7 @@ function openEditModal(button) {
     document.getElementById('edit-name').value = name;
     document.getElementById('edit-email').value = email;
     document.getElementById('edit-phone').value = phone || '';
+    document.getElementById('edit-clean-status').value = cleanStatus || 'pending';
     document.getElementById('edit-address').value = address;
     document.getElementById('edit-date').value = date;
     document.getElementById('edit-type').value = type;

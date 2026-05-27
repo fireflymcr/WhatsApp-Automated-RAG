@@ -524,6 +524,12 @@ Example response: "Before we can discuss or update your booking, I just need to 
                                         if not clean_pot.isdigit() and "@" not in contact_name:
                                             booking["customer_name"] = contact_name
 
+                                phone_val = booking.get("customer_phone") or ""
+                                if not phone_val:
+                                    p_val = recipient.split("@")[0] if recipient and "@" in recipient else ""
+                                    if p_val.isdigit():
+                                        phone_val = p_val
+
                                 self.tracking_db.create_or_update_appointment(
                                     chat_jid=recipient,
                                     customer_name=booking["customer_name"],
@@ -532,7 +538,9 @@ Example response: "Before we can discuss or update your booking, I just need to 
                                     clean_date=booking["clean_date"],
                                     clean_type=booking["clean_type"] or "Clean",
                                     price=booking["price"],
-                                    status="pending"
+                                    status="pending",
+                                    phone=phone_val,
+                                    clean_status="pending"
                                 )
                                 logger.info("Successfully recorded bot booking confirmation as pending")
                                 self._send_booking_confirmation_email(booking)
@@ -589,7 +597,8 @@ Example response: "Before we can discuss or update your booking, I just need to 
                                     clean_type=booking["clean_type"],
                                     price=booking["price"],
                                     status="pending",
-                                    phone=booking["customer_phone"]
+                                    phone=booking["customer_phone"],
+                                    clean_status="need_to_quote"
                                 )
                                 if app_id:
                                     logger.info(f"Successfully recorded bot provisional booking {app_id} (is_update={is_update})")
@@ -734,6 +743,7 @@ Example response: "Before we can discuss or update your booking, I just need to 
                             "{\n"
                             '  "customer_name": "extracted name or null",\n'
                             '  "customer_email": "extracted email or null",\n'
+                            '  "customer_phone": "extracted phone number or null",\n'
                             '  "address": "extracted full address with postcode or null",\n'
                             '  "clean_date": "extracted clean date and time or null",\n'
                             '  "clean_type": "extracted clean type (e.g. Deep Clean, Standard Clean) or null",\n'
@@ -761,6 +771,7 @@ Example response: "Before we can discuss or update your booking, I just need to 
 
             customer_name = data.get("customer_name")
             customer_email = data.get("customer_email")
+            customer_phone = data.get("customer_phone")
             address = data.get("address")
             clean_date = data.get("clean_date")
             clean_type = data.get("clean_type")
@@ -778,6 +789,14 @@ Example response: "Before we can discuss or update your booking, I just need to 
                     if not clean_pot.isdigit() and "@" not in contact_name:
                         customer_name = contact_name
 
+            # Resolve phone number fallback
+            if not customer_phone or str(customer_phone).lower() == "null":
+                p_val = jid.split("@")[0] if jid and "@" in jid else ""
+                if p_val.isdigit():
+                    customer_phone = p_val
+                else:
+                    customer_phone = ""
+
             # Check if we have minimum viable details
             if not customer_name or not customer_email or not clean_date or not price:
                 logger.warning(f"Failed to auto-confirm booking for {chat_name}: Missing vital details (Name: {customer_name}, Email: {customer_email}, Date: {clean_date}, Price: {price})")
@@ -792,7 +811,9 @@ Example response: "Before we can discuss or update your booking, I just need to 
                 clean_date=clean_date,
                 clean_type=clean_type or "Clean",
                 price=price,
-                status="confirmed"
+                status="confirmed",
+                phone=customer_phone,
+                clean_status="pending"
             )
 
             if not app_id:
