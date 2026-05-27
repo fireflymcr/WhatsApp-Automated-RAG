@@ -16,6 +16,54 @@ from db import BridgeDB, TrackingDB
 
 logger = logging.getLogger("whatsapp-bot.reply")
 
+
+def robust_json_load(raw_json: str) -> Optional[dict]:
+    import re
+    import json
+    
+    # Strip whitespace
+    raw_json = raw_json.strip()
+    
+    # Clean possible markdown wrapping
+    if raw_json.startswith("```"):
+        lines = raw_json.split("\n")
+        if lines[0].startswith("```json") or lines[0].startswith("```"):
+            raw_json = "\n".join(lines[1:-1]).strip()
+            
+    data = None
+    # Try parsing the raw string
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError:
+        pass
+        
+    if not isinstance(data, dict):
+        # Regex fallback to find first '{' and last '}'
+        match = re.search(r'\{.*\}', raw_json, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError as ex:
+                logger.error(f"Failed to parse extracted JSON substring: {ex}")
+                
+    if isinstance(data, dict):
+        # Unwrap nested booking keys if LLM added them
+        for parent_key in ["booking", "booking_details", "details"]:
+            if parent_key in data and isinstance(data[parent_key], dict):
+                data = data[parent_key]
+                break
+                
+        # Enforce all required keys to avoid KeyError downstream
+        required_keys = ["customer_name", "customer_email", "customer_phone", "address", "clean_date", "clean_type", "price"]
+        for k in required_keys:
+            data.setdefault(k, None)
+            
+        return data
+        
+    logger.error(f"Could not extract a valid JSON object from LLM response: {raw_json}")
+    return None
+
+
 DEFAULT_EMAIL_SUBJECT = "Booking Confirmation - {clean_type} for {customer_name}"
 DEFAULT_EMAIL_BODY_HTML = """<div style="font-family: Arial, sans-serif; color: #2d3436; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #dfe6e9; border-radius: 8px;">
     <h2 style="color: #0984e3; text-align: center; border-bottom: 2px solid #0984e3; padding-bottom: 10px;">📅 BOOKING CONFIRMATION</h2>
@@ -217,6 +265,9 @@ class ReplyEngine:
                 skipped_count += 1
                 continue
 
+            # ── Reset is_deleted to restore chat in dashboard UI ──
+            self.tracking_db.reset_chat_deleted_status(jid)
+
             # ── Build conversation context ──
             # Look through the whole chat history (limit=None) to be context-aware of everything said.
             context = self.bridge_db.get_conversation_context(jid, limit=None)
@@ -283,7 +334,7 @@ class ReplyEngine:
                     {"role": "user", "content": prompt},
                 ],
                 temperature=0.1,
-                max_tokens=10,
+                max_tokens=150,
             )
             result = response.choices[0].message.content.strip().upper()
             # Validate result
@@ -709,7 +760,7 @@ Example response: "Before we can discuss or update your booking, I just need to 
                     }
                 ],
                 temperature=0.1,
-                max_tokens=5,
+                max_tokens=150,
             )
             res = response.choices[0].message.content.strip().upper()
             return "YES" in res
@@ -760,14 +811,11 @@ Example response: "Before we can discuss or update your booking, I just need to 
                 max_tokens=500,
             )
             raw_json = response.choices[0].message.content.strip()
-            # Clean possible markdown wrapping
-            if raw_json.startswith("```"):
-                lines = raw_json.split("\n")
-                if lines[0].startswith("```json") or lines[0].startswith("```"):
-                    raw_json = "\n".join(lines[1:-1]).strip()
+            data = robust_json_load(raw_json)
+            if not data:
+                logger.error(f"Failed to parse booking details from LLM response: {raw_json}")
+                return False, None
 
-            import json
-            data = json.loads(raw_json)
 
             customer_name = data.get("customer_name")
             customer_email = data.get("customer_email")
@@ -1011,7 +1059,7 @@ Example response: "Before we can discuss or update your booking, I just need to 
                     }
                 ],
                 temperature=0.1,
-                max_tokens=5,
+                max_tokens=150,
             )
             res = response.choices[0].message.content.strip().upper()
             return "YES" in res
@@ -1056,12 +1104,7 @@ Example response: "Before we can discuss or update your booking, I just need to 
                 max_tokens=500,
             )
             raw_json = response.choices[0].message.content.strip()
-            if raw_json.startswith("```"):
-                lines = raw_json.split("\n")
-                if lines[0].startswith("```json") or lines[0].startswith("```"):
-                    raw_json = "\n".join(lines[1:-1]).strip()
-            import json
-            return json.loads(raw_json)
+            return robust_json_load(raw_json)
         except Exception as e:
             logger.error(f"Failed to extract booking details: {e}")
             return None

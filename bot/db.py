@@ -427,3 +427,26 @@ class TrackingDB:
         finally:
             conn.close()
 
+    def reset_chat_deleted_status(self, chat_jid: str):
+        """Reset the is_deleted flag to 0 for a chat JID to restore it in the dashboard UI."""
+        conn = self._connect()
+        try:
+            cur = conn.cursor()
+            # Check if the chat_status table exists to avoid errors
+            cur.execute(f"""
+                IF EXISTS (SELECT * FROM sysobjects WHERE name='{self.prefix}_chat_status' AND xtype='U')
+                BEGIN
+                    IF EXISTS (SELECT jid FROM {self.prefix}_chat_status WHERE jid = %s)
+                        UPDATE {self.prefix}_chat_status SET is_deleted = 0 WHERE jid = %s
+                    ELSE
+                        INSERT INTO {self.prefix}_chat_status (jid, is_pinned, is_deleted) VALUES (%s, 0, 0)
+                END
+            """, (chat_jid, chat_jid, chat_jid))
+            conn.commit()
+            logger.info(f"Reset is_deleted status for chat {chat_jid}")
+        except Exception as e:
+            logger.error(f"Failed to reset chat deleted status for {chat_jid}: {e}")
+        finally:
+            conn.close()
+
+

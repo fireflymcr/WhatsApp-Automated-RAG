@@ -20,6 +20,53 @@ from db import bridge_query, sql_query, sql_execute, INSTANCE
 from .bot import DEFAULT_EMAIL_SUBJECT, DEFAULT_EMAIL_BODY_HTML, safe_format
 
 logger = logging.getLogger("dashboard.chats")
+
+def robust_json_load(raw_json: str) -> Optional[dict]:
+    import re
+    import json
+    
+    # Strip whitespace
+    raw_json = raw_json.strip()
+    
+    # Clean possible markdown wrapping
+    if raw_json.startswith("```"):
+        lines = raw_json.split("\n")
+        if lines[0].startswith("```json") or lines[0].startswith("```"):
+            raw_json = "\n".join(lines[1:-1]).strip()
+            
+    data = None
+    # Try parsing the raw string
+    try:
+        data = json.loads(raw_json)
+    except json.JSONDecodeError:
+        pass
+        
+    if not isinstance(data, dict):
+        # Regex fallback to find first '{' and last '}'
+        match = re.search(r'\{.*\}', raw_json, re.DOTALL)
+        if match:
+            try:
+                data = json.loads(match.group(0))
+            except json.JSONDecodeError as ex:
+                logger.error(f"Failed to parse extracted JSON substring: {ex}")
+                
+    if isinstance(data, dict):
+        # Unwrap nested booking keys if LLM added them
+        for parent_key in ["booking", "booking_details", "details"]:
+            if parent_key in data and isinstance(data[parent_key], dict):
+                data = data[parent_key]
+                break
+                
+        # Enforce all required keys to avoid KeyError downstream
+        required_keys = ["customer_name", "customer_email", "customer_phone", "address", "clean_date", "clean_type", "price"]
+        for k in required_keys:
+            data.setdefault(k, None)
+            
+        return data
+        
+    logger.error(f"Could not extract a valid JSON object from LLM response: {raw_json}")
+    return None
+
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 CONFIG_PATH = os.environ.get("CONFIG_PATH", "/app/context.yaml")
@@ -726,7 +773,6 @@ def _is_provisional_booking(message: str, config: dict) -> bool:
         base_url = llm_cfg.get("base_url", "http://host.docker.internal:12344/v1")
         api_key = llm_cfg.get("api_key", "")
         model = llm_cfg.get("model", "local-model")
-        
         openai_client = OpenAI(base_url=base_url, api_key=api_key)
         response = openai_client.chat.completions.create(
             model=model,
@@ -743,7 +789,7 @@ def _is_provisional_booking(message: str, config: dict) -> bool:
                 }
             ],
             temperature=0.1,
-            max_tokens=5,
+            max_tokens=150,
         )
         res = response.choices[0].message.content.strip().upper()
         return "YES" in res
@@ -805,12 +851,7 @@ def _extract_booking_details(chat_jid: str, config: dict) -> Optional[dict]:
             max_tokens=500,
         )
         raw_json = response.choices[0].message.content.strip()
-        if raw_json.startswith("```"):
-            lines = raw_json.split("\n")
-            if lines[0].startswith("```json") or lines[0].startswith("```"):
-                raw_json = "\n".join(lines[1:-1]).strip()
-        import json
-        return json.loads(raw_json)
+        return robust_json_load(raw_json)
     except Exception as e:
         logger.error(f"Failed to extract booking details in chats: {e}")
         return None
