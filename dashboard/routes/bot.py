@@ -303,14 +303,20 @@ async def calendar_page(request: Request, search: str = "", email_sent: str = ""
                 ALTER TABLE {INSTANCE}_appointments ADD phone NVARCHAR(50) NULL
             END
         """)
+        sql_execute(f"""
+            IF NOT EXISTS (SELECT * FROM syscolumns WHERE id=object_id('{INSTANCE}_appointments') AND name='archived')
+            BEGIN
+                ALTER TABLE {INSTANCE}_appointments ADD archived BIT DEFAULT 0 WITH VALUES
+            END
+        """)
     except Exception as e:
         logger.error(f"Failed to ensure columns on appointments table: {e}")
 
     # Fetch appointments
-    filt = ""
+    filt = "WHERE (a.archived = 0 OR a.archived IS NULL)"
     params = ()
     if search:
-        filt = "WHERE a.customer_name LIKE %s OR a.customer_email LIKE %s OR a.phone LIKE %s OR a.address LIKE %s OR a.clean_type LIKE %s OR s.custom_name LIKE %s"
+        filt = "WHERE (a.archived = 0 OR a.archived IS NULL) AND (a.customer_name LIKE %s OR a.customer_email LIKE %s OR a.phone LIKE %s OR a.address LIKE %s OR a.clean_type LIKE %s OR s.custom_name LIKE %s)"
         search_param = f"%{search}%"
         params = (search_param, search_param, search_param, search_param, search_param, search_param)
         
@@ -427,11 +433,14 @@ async def add_appointment(
 
 
 @router.post("/api/appointments/{app_id}/delete")
-async def delete_appointment(app_id: int):
+async def delete_appointment(app_id: int, request: Request):
     try:
         sql_execute(f"DELETE FROM {INSTANCE}_appointments WHERE id = %s", (app_id,))
     except Exception as e:
         logger.error(f"Failed to delete appointment: {e}")
+    referer = request.headers.get("referer", "/calendar")
+    if "/calendar/archive" in referer:
+        return RedirectResponse("/calendar/archive", status_code=303)
     return RedirectResponse("/calendar", status_code=303)
 
 
@@ -944,7 +953,7 @@ async def export_ics():
 @router.get("/api/appointments/export/csv")
 async def export_csv():
     try:
-        appointments = sql_query(f"SELECT * FROM {INSTANCE}_appointments ORDER BY created_at DESC")
+        appointments = sql_query(f"SELECT * FROM {INSTANCE}_appointments WHERE archived = 0 OR archived IS NULL ORDER BY created_at DESC")
     except Exception:
         appointments = []
         
@@ -1018,3 +1027,148 @@ async def emails_page(request: Request, status: str = None, q: str = None):
         "search": q,
         "instance_name": INSTANCE,
     })
+
+
+@router.get("/calendar/archive", response_class=HTMLResponse)
+async def archive_page(request: Request, search: str = ""):
+    # Ensure archived column exists
+    try:
+        sql_execute(f"""
+            IF NOT EXISTS (SELECT * FROM syscolumns WHERE id=object_id('{INSTANCE}_appointments') AND name='archived')
+            BEGIN
+                ALTER TABLE {INSTANCE}_appointments ADD archived BIT DEFAULT 0 WITH VALUES
+            END
+        """)
+    except Exception as e:
+        logger.error(f"Failed to ensure archived column: {e}")
+
+    # Fetch archived appointments
+    filt = "WHERE a.archived = 1"
+    params = ()
+    if search:
+        filt = "WHERE a.archived = 1 AND (a.customer_name LIKE %s OR a.customer_email LIKE %s OR a.phone LIKE %s OR a.address LIKE %s OR a.clean_type LIKE %s OR s.custom_name LIKE %s)"
+        search_param = f"%{search}%"
+        params = (search_param, search_param, search_param, search_param, search_param, search_param)
+        
+    try:
+        appointments = sql_query(f"""
+            SELECT a.id, a.chat_jid, a.customer_name, a.customer_email, a.phone, a.address, a.clean_date, a.clean_type, a.price, a.status, a.clean_status, a.notes, a.created_at,
+                   s.custom_name
+            FROM {INSTANCE}_appointments a
+            LEFT JOIN {INSTANCE}_chat_status s ON a.chat_jid = s.jid
+            {filt}
+            ORDER BY a.created_at DESC
+        """, params)
+    except Exception as e:
+        logger.error(f"Failed to fetch archived appointments: {e}")
+        appointments = []
+
+    # Fetch contact name map from SQLite bridge
+    contact_names = {}
+    try:
+        rows = bridge_query("SELECT jid, name FROM chats")
+        for r in rows:
+            if r.get("jid") and r.get("name"):
+                contact_names[r["jid"]] = r["name"].strip()
+    except Exception as e:
+        logger.error(f"Failed to fetch contact names from bridge: {e}")
+
+    # Map display names
+    for app in appointments:
+        cust_jid = app.get("chat_jid") or ""
+        cust_name = app.get("customer_name") or ""
+        custom_name = app.get("custom_name")
+        
+        name = custom_name or cust_name or "Customer"
+        is_numeric_or_jid = False
+        if name:
+            clean_name = re.sub(r'[\s\+\-\(\)@\.]', '', name)
+            if clean_name.isdigit() or "@" in name:
+                is_numeric_or_jid = True
+                
+        if (not name or is_numeric_or_jid or name == "Customer") and cust_jid in contact_names:
+            potential_name = contact_names[cust_jid]
+            clean_pot = re.sub(r'[\s\+\-\(\)@\.]', '', potential_name)
+            if potential_name and not clean_pot.isdigit() and "@" not in potential_name:
+                name = potential_name
+                
+        if "@" in name:
+            name = name.split("@")[0]
+            
+        app["display_name"] = name
+
+    return templates.TemplateResponse(request, "archive.html", {
+        "page": "archive",
+        "appointments": appointments,
+        "search": search,
+        "instance_name": INSTANCE,
+    })
+
+
+@router.post("/api/appointments/{app_id}/archive")
+async def archive_appointment(app_id: int, request: Request):
+    try:
+        sql_execute(f"UPDATE {INSTANCE}_appointments SET archived = 1 WHERE id = %s", (app_id,))
+        logger.info(f"Archived appointment {app_id}")
+    except Exception as e:
+        logger.error(f"Failed to archive appointment: {e}")
+    referer = request.headers.get("referer", "/calendar")
+    if "/calendar/archive" in referer:
+        return RedirectResponse("/calendar/archive", status_code=303)
+    return RedirectResponse("/calendar", status_code=303)
+
+
+@router.post("/api/appointments/{app_id}/restore")
+async def restore_appointment(app_id: int, request: Request):
+    try:
+        sql_execute(f"UPDATE {INSTANCE}_appointments SET archived = 0 WHERE id = %s", (app_id,))
+        logger.info(f"Restored appointment {app_id}")
+    except Exception as e:
+        logger.error(f"Failed to restore appointment: {e}")
+    referer = request.headers.get("referer", "/calendar")
+    if "/calendar/archive" in referer:
+        return RedirectResponse("/calendar/archive", status_code=303)
+    return RedirectResponse("/calendar", status_code=303)
+
+
+@router.get("/api/appointments/archive/export/csv")
+async def export_archive_csv():
+    try:
+        appointments = sql_query(f"SELECT * FROM {INSTANCE}_appointments WHERE archived = 1 ORDER BY created_at DESC")
+    except Exception:
+        appointments = []
+        
+    csv_lines = ["ID,Customer Name,Customer Email,Customer Phone,Address,Clean Date,Clean Type,Price,Deposit Status,Job Status,Created At"]
+    for app in appointments:
+        clean_status_raw = app.get("clean_status") or "pending"
+        if clean_status_raw == "need_to_quote":
+            clean_status_friendly = "Need to Quote"
+        elif clean_status_raw == "completed":
+            clean_status_friendly = "Clean Completed"
+        else:
+            clean_status_friendly = "Clean Pending"
+            
+        deposit_status_raw = app.get("status") or "pending"
+        deposit_status_friendly = "Deposit Paid" if deposit_status_raw == "confirmed" else "Deposit Unpaid"
+        
+        row = [
+            str(app["id"]),
+            f'"{app["customer_name"]}"',
+            f'"{app["customer_email"]}"',
+            f'"{app.get("phone") or ""}"',
+            f'"{app["address"].replace(chr(34), chr(39))}"',
+            f'"{app["clean_date"]}"',
+            f'"{app["clean_type"]}"',
+            f'"{app["price"]}"',
+            f'"{deposit_status_friendly}"',
+            f'"{clean_status_friendly}"',
+            str(app["created_at"])
+        ]
+        csv_lines.append(",".join(row))
+        
+    csv_content = "\n".join(csv_lines)
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=appointments_archive.csv"}
+    )

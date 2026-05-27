@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+    .calendar-container {
+        display: block;
+        max-width: 1000px;
+        margin: 0 auto;
+    }
+    
+    .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 24px;
+        flex-wrap: wrap;
+    }
+    
+    .search-box {
+        flex: 1;
+        min-width: 250px;
+        position: relative;
+    }
+    
+    .search-box input {
+        width: 100%;
+        padding: 12px 16px 12px 40px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        font-size: 0.95rem;
+        transition: border-color 0.2s;
+    }
+    
+    .search-box input:focus {
+        border-color: var(--accent);
+        outline: none;
+    }
+    
+    .search-box .search-icon {
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-secondary);
+        font-size: 1.1rem;
+    }
+    
+    .action-group {
+        display: flex;
+        gap: 12px;
+    }
+    
+    .btn-export {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 18px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 600;
+        transition: all 0.2s;
+        cursor: pointer;
+    }
+    
+    .btn-export:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--accent);
+        transform: translateY(-1px);
+    }
+
+    .booking-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .booking-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 20px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        transition: transform 0.2s, border-color 0.2s;
+    }
+    
+    .booking-card:hover {
+        border-color: rgba(255, 255, 255, 0.15);
+    }
+    
+    .booking-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    
+    .customer-info h3 {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0 0 4px 0;
+    }
+    
+    .customer-info .email {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+    }
+    
+    .status-badge {
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 4px 8px;
+        border-radius: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        border: none;
+        cursor: pointer;
+    }
+    
+    .status-badge.confirmed {
+        background: rgba(46, 204, 113, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(46, 204, 113, 0.4);
+    }
+    
+    .status-badge.pending {
+        background: rgba(231, 76, 60, 0.15);
+        color: var(--danger);
+        border: 1px solid rgba(231, 76, 60, 0.4);
+    }
+    
+    .status-badge.clean-completed {
+        background: rgba(0, 184, 148, 0.15);
+        color: var(--success);
+        border: 1px solid rgba(0, 184, 148, 0.4);
+    }
+    
+    .status-badge.clean-pending {
+        background: rgba(9, 132, 227, 0.15);
+        color: #0984e3;
+        border: 1px solid rgba(9, 132, 227, 0.4);
+    }
+
+    .status-badge.clean-need_to_quote {
+        background: rgba(230, 126, 34, 0.15);
+        color: #e67e22;
+        border: 1px solid rgba(230, 126, 34, 0.4);
+    }
+    
+    .booking-body {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+    }
+    
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    
+    .detail-item .label {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+    }
+    
+    .detail-item .val {
+        font-size: 0.95rem;
+        color: var(--text-primary);
+        font-weight: 500;
+    }
+    
+    .booking-footer {
+        display: flex;
+        gap: 10px;
+        margin-top: 16px;
+        padding-top: 12px;
+        border-top: 1px dashed var(--border);
+        flex-wrap: wrap;
+    }
+    
+    .btn-action {
+        padding: 8px 14px;
+        border-radius: var(--radius-sm);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+        border: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-decoration: none;
+    }
+    
+    .btn-action.restore {
+        background: var(--accent);
+        color: #fff;
+    }
+    
+    .btn-action.restore:hover {
+        background: var(--accent-hover);
+        transform: translateY(-1px);
+    }
+    
+    .btn-action.delete {
+        background: rgba(231, 76, 60, 0.1);
+        color: var(--danger);
+        border: 1px solid rgba(231, 76, 60, 0.2);
+    }
+    
+    .btn-action.delete:hover {
+        background: var(--danger);
+        color: #fff;
+        border-color: var(--danger);
+    }
+    
+    .btn-action.notes-btn {
+        background: var(--bg-card);
+        color: var(--text-primary);
+        border: 1px solid var(--border);
+    }
+
+    .btn-action.notes-btn:hover {
+        background: var(--bg-card-hover);
+        border-color: var(--accent);
+        transform: translateY(-1px);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 48px;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-secondary);
+    }
+    
+    .empty-state .icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+    }
+</style>
+
+<div class="page-header" style="margin-bottom: 24px;">
+    <h1>📦 Archived Bookings</h1>
+    <p style="color: var(--text-secondary); margin-top: 4px;">View, restore, or permanently delete completed cleans and quotes you did not win.</p>
+</div>
+
+<div class="calendar-container">
+    <div class="toolbar">
+        <form method="get" action="/calendar/archive" class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" name="search" value="{{ search }}" placeholder="Search archived bookings by name, type, postcode...">
+        </form>
+        
+        <div class="action-group">
+            <a href="/api/appointments/archive/export/csv" class="btn-export">
+                <span>📥</span> Export Archived Data
+            </a>
+        </div>
+    </div>
+    
+    <div class="booking-grid">
+        {% if appointments %}
+            {% for app in appointments %}
+                <div class="booking-card">
+                    <div class="booking-header">
+                        <div class="customer-info">
+                            {% if app.chat_jid %}
+                                <h3><a href="/chats/{{ app.chat_jid }}" style="color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="View WhatsApp Chat History">{{ app.display_name or app.customer_name }} <span style="font-size: 0.85rem; opacity: 0.7;">💬</span></a></h3>
+                            {% else %}
+                                <h3>{{ app.display_name or app.customer_name }}</h3>
+                            {% endif %}
+                            <div class="email">📧 {{ app.customer_email }}</div>
+                            {% if app.phone %}
+                                <div class="phone" style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 2px;">📞 {{ app.phone }}</div>
+                            {% endif %}
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end;">
+                            <form method="post" action="/api/appointments/{{ app.id }}/toggle-status" style="display:inline; margin: 0;">
+                                <button type="submit" class="status-badge {{ app.status }}" title="Click to toggle payment status">
+                                    {% if app.status == 'confirmed' %}
+                                        🟢 Deposit Paid
+                                    {% else %}
+                                        🔴 Deposit Unpaid
+                                    {% endif %}
+                                </button>
+                            </form>
+                            
+                            <form method="post" action="/api/appointments/{{ app.id }}/toggle-clean-status" style="display:inline; margin: 0;">
+                                <button type="submit" class="status-badge clean-{{ app.clean_status or 'pending' }}" title="Click to toggle job status">
+                                    {% if app.clean_status == 'completed' %}
+                                        ✨ Clean Completed
+                                    {% elif app.clean_status == 'need_to_quote' %}
+                                        🔍 Need to Quote
+                                    {% else %}
+                                        ⏳ Clean Pending
+                                    {% endif %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    
+                    <div class="booking-body">
+                        <div class="detail-item">
+                            <span class="label">🏡 Clean Address</span>
+                            <span class="val">{{ app.address }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">📅 Date & Time</span>
+                            <span class="val">{{ app.clean_date }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">🧹 Clean Type</span>
+                            <span class="val">{{ app.clean_type }}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="label">💰 Agreed Price</span>
+                            <span class="val" style="color: var(--success); font-weight: 700;">{{ app.price }}</span>
+                        </div>
+                        {% if app.notes %}
+                            <div class="detail-item" style="grid-column: span 2; margin-top: 10px; background: rgba(255, 255, 255, 0.02); padding: 12px; border-radius: var(--radius-sm); border-left: 3px solid var(--warning);">
+                                <span class="label" style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">📝 Notes</span>
+                                <span class="val" id="notes-display-{{ app.id }}" style="font-size: 0.9rem; color: var(--text-secondary); white-space: pre-wrap; font-weight: normal; line-height: 1.4;">{{ app.notes }}</span>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <!-- Inline Notes Panel -->
+                    <div id="notes-section-{{ app.id }}" class="notes-section" style="display: none; padding: 15px; background: rgba(0,0,0,0.15); border-radius: var(--radius-sm); margin: 12px 0; border: 1px solid var(--border);">
+                        <label style="display: block; font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 600;">📝 JOB NOTES</label>
+                        <textarea id="notes-input-{{ app.id }}" rows="3" style="width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-primary); padding: 10px; font-size: 0.9rem; resize: vertical; line-height: 1.4;" placeholder="Type any important notes about this clean here...">{{ app.notes or '' }}</textarea>
+                        <div style="display: flex; justify-content: flex-end; margin-top: 10px; gap: 8px;">
+                            <button type="button" class="btn-action" style="background: var(--bg-card-hover); color: var(--text-primary); border: 1px solid var(--border);" onclick="toggleNotes('{{ app.id }}')">Cancel</button>
+                            <button type="button" class="btn-action" style="background: var(--success); color: white; border: none;" onclick="saveNotes('{{ app.id }}')">💾 Save Notes</button>
+                        </div>
+                    </div>
+                    
+                    <div class="booking-footer">
+                        <form method="post" action="/api/appointments/{{ app.id }}/restore" style="display:inline;">
+                            <button type="submit" class="btn-action restore">
+                                📦 Restore to Calendar
+                            </button>
+                        </form>
+                        
+                        <button type="button" class="btn-action notes-btn" onclick="toggleNotes('{{ app.id }}')">
+                            📝 Notes
+                        </button>
+                        
+                        <form method="post" action="/api/appointments/{{ app.id }}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to permanently delete this archived booking? This action cannot be undone.');">
+                            <button type="submit" class="btn-action delete">
+                                🗑️ Delete Permanently
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="icon">📦</div>
+                <h3>No archived bookings found</h3>
+                <p>Cleans you archive from the Calendar page will show up here.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+function toggleNotes(appId) {
+    const notesSection = document.getElementById('notes-section-' + appId);
+    if (notesSection.style.display === 'none') {
+        notesSection.style.display = 'block';
+        document.getElementById('notes-input-' + appId).focus();
+    } else {
+        notesSection.style.display = 'none';
+    }
+}
+
+async function saveNotes(appId) {
+    const notesInput = document.getElementById('notes-input-' + appId);
+    const notes = notesInput.value;
+    
+    try {
+        const response = await fetch('/api/appointments/' + appId + '/update-notes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes: notes })
+        });
+        
+        const data = await response.json();
+        if (data.success) {
+            window.location.reload();
+        } else {
+            alert('Error saving notes: ' + (data.message || 'Unknown error'));
+        }
+    } catch (err) {
+        console.error(err);
+        alert('Failed to save notes.');
+    }
+}
+</script>
+{% endblock %}

@@ -177,6 +177,7 @@ class TrackingDB:
                     price NVARCHAR(50),
                     status NVARCHAR(50) DEFAULT 'pending',
                     clean_status NVARCHAR(50) DEFAULT 'pending',
+                    archived BIT DEFAULT 0,
                     created_at DATETIME2 DEFAULT GETDATE())
             """)
             cur.execute(f"""
@@ -189,6 +190,12 @@ class TrackingDB:
                 IF NOT EXISTS (SELECT * FROM syscolumns WHERE id=object_id('{p}_appointments') AND name='clean_status')
                 BEGIN
                     ALTER TABLE {p}_appointments ADD clean_status NVARCHAR(50) DEFAULT 'pending'
+                END
+            """)
+            cur.execute(f"""
+                IF NOT EXISTS (SELECT * FROM syscolumns WHERE id=object_id('{p}_appointments') AND name='archived')
+                BEGIN
+                    ALTER TABLE {p}_appointments ADD archived BIT DEFAULT 0 WITH VALUES
                 END
             """)
             cur.execute(f"""

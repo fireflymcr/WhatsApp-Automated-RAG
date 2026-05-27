@@ -273,6 +273,19 @@
         border-color: var(--danger);
     }
 
+    .btn-action.archive {
+        background: rgba(243, 156, 18, 0.1);
+        color: #f39c12;
+        border: 1px solid rgba(243, 156, 18, 0.2);
+    }
+    
+    .btn-action.archive:hover {
+        background: #f39c12;
+        color: #fff;
+        border-color: #f39c12;
+        transform: translateY(-1px);
+    }
+
     .btn-action.edit-btn, .btn-action.notes-btn {
         background: var(--bg-card);
         color: var(--text-primary);
@@ -502,6 +515,12 @@
                         <button type="button" class="btn-action notes-btn" onclick="toggleNotes('{{ app.id }}')">
                             📝 Notes
                         </button>
+                        
+                        <form method="post" action="/api/appointments/{{ app.id }}/archive" style="display:inline;" onsubmit="return confirm('Are you sure you want to archive this booking?');">
+                            <button type="submit" class="btn-action archive">
+                                📦 Archive
+                            </button>
+                        </form>
                         
                         <form method="post" action="/api/appointments/{{ app.id }}/delete" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this booking?');">
                             <button type="submit" class="btn-action delete">
